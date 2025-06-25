@@ -26,7 +26,7 @@ SECRET_KEY = os.environ.get('SECRET_KEY', '783c9wqt%v1u5s!0%&q-3zeihq6m3b$-eb_^$
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = True
 
-ALLOWED_HOSTS = os.environ.get('ALLOWED_HOSTS', 'localhost,127.0.0.1').split(',')
+ALLOWED_HOSTS = ['avgustin.pythonanywhere.com', '127.0.0.1', 'localhost']
 
 
 # Application definition
