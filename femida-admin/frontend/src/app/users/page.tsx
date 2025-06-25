@@ -8,6 +8,7 @@ import { useTranslation } from 'react-i18next';
 import { FaFileCsv, FaUserShield, FaUserCog, FaUserTie, FaPlus, FaEdit, FaTrash } from 'react-icons/fa';
 import PhoneInput from 'react-phone-input-2';
 import 'react-phone-input-2/lib/style.css';
+import { API_URL } from '../../shared/api';
 
 type User = {
   id: number;
@@ -66,7 +67,7 @@ export default function UsersPage() {
     }
     
     const fetchUsers = () => {
-      fetch('http://127.0.0.1:8000/api/users/', {
+      fetch(`${API_URL}/api/users/`, {
         headers: { Authorization: `Bearer ${token}` },
       })
         .then(res => {
@@ -138,7 +139,7 @@ export default function UsersPage() {
     setAddLoading(true);
     try {
       const token = localStorage.getItem('access');
-      const res = await fetch('http://127.0.0.1:8000/api/users/', {
+      const res = await fetch(`${API_URL}/api/users/`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -155,7 +156,7 @@ export default function UsersPage() {
         setShowAddModal(false);
         setAddForm({ username: '', first_name: '', last_name: '', role: 'operator', phone: '', email: '', password: '' });
         // обновить список
-        fetch('http://127.0.0.1:8000/api/users/', {
+        fetch(`${API_URL}/api/users/`, {
           headers: { Authorization: `Bearer ${token}` },
         })
           .then(res => res.json())
@@ -185,12 +186,12 @@ export default function UsersPage() {
   const handleDeleteUser = async (userId: number) => {
     if (!window.confirm('Удалить пользователя?')) return;
     const token = localStorage.getItem('access');
-    await fetch(`http://127.0.0.1:8000/api/users/${userId}/`, {
+    await fetch(`${API_URL}/api/users/${userId}/`, {
       method: 'DELETE',
       headers: { Authorization: `Bearer ${token}` },
     });
     // обновить список
-    fetch('http://127.0.0.1:8000/api/users/', {
+    fetch(`${API_URL}/api/users/`, {
       headers: { Authorization: `Bearer ${token}` },
     })
       .then(res => res.json())

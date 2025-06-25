@@ -5,6 +5,7 @@ import { useEffect, useState } from 'react';
 import { saveAs } from 'file-saver';
 import { useTranslation } from 'react-i18next';
 import { FaBed, FaCrown, FaStar, FaEdit, FaTrash, FaFileCsv, FaCheckCircle, FaTimesCircle, FaPlus } from 'react-icons/fa';
+import { API_URL } from '../../shared/api';
 
 type Room = {
   id: number;
@@ -81,8 +82,8 @@ export default function RoomsPage() {
     }
     setLoading(true);
     Promise.all([
-      fetch('http://127.0.0.1:8000/api/rooms/', { headers: { Authorization: `Bearer ${token}` } }).then(res => res.json()),
-      fetch('http://127.0.0.1:8000/api/bookings/', { headers: { Authorization: `Bearer ${token}` } }).then(res => res.json())
+      fetch(`${API_URL}/api/rooms/`, { headers: { Authorization: `Bearer ${token}` } }).then(res => res.json()),
+      fetch(`${API_URL}/api/bookings/`, { headers: { Authorization: `Bearer ${token}` } }).then(res => res.json())
     ])
       .then(([roomsData, bookingsData]) => {
         setRooms(roomsData);
@@ -110,7 +111,7 @@ export default function RoomsPage() {
   const handleEditSave = async () => {
     if (!editRoom) return;
     const token = localStorage.getItem('access');
-    const res = await fetch(`http://127.0.0.1:8000/api/rooms/${editRoom.id}/`, {
+    const res = await fetch(`${API_URL}/api/rooms/${editRoom.id}/`, {
       method: 'PUT',
       headers: {
         'Content-Type': 'application/json',
@@ -131,7 +132,7 @@ export default function RoomsPage() {
   const handleDelete = async (roomId: number) => {
     if (!window.confirm('Удалить номер?')) return;
     const token = localStorage.getItem('access');
-    await fetch(`http://127.0.0.1:8000/api/rooms/${roomId}/`, {
+    await fetch(`${API_URL}/api/rooms/${roomId}/`, {
       method: 'DELETE',
       headers: { Authorization: `Bearer ${token}` },
     });
@@ -162,7 +163,7 @@ export default function RoomsPage() {
     setAddSuccess(false);
     try {
       const token = localStorage.getItem('access');
-      const res = await fetch('http://127.0.0.1:8000/api/rooms/', {
+      const res = await fetch(`${API_URL}/api/rooms/`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -180,7 +181,7 @@ export default function RoomsPage() {
         setShowAddModal(false);
         setAddForm([{ number: '', room_class: 'standard', description: '' }]);
         // Обновить список номеров
-        const roomsRes = await fetch('http://127.0.0.1:8000/api/rooms/', { headers: { Authorization: `Bearer ${token}` } });
+        const roomsRes = await fetch(`${API_URL}/api/rooms/`, { headers: { Authorization: `Bearer ${token}` } });
         setRooms(await roomsRes.json());
       }
     } catch {

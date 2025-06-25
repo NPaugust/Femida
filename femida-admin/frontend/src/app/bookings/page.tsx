@@ -5,6 +5,7 @@ import { useEffect, useState } from 'react';
 import { saveAs } from 'file-saver';
 import { useTranslation } from 'react-i18next';
 import { FaCalendarCheck, FaTrash, FaFileCsv, FaPlus } from 'react-icons/fa';
+import { API_URL } from '../../shared/api';
 
 type Room = {
   id: number;
@@ -67,9 +68,9 @@ export default function BookingsPage() {
     }
     setLoading(true);
     Promise.all([
-      fetch('http://127.0.0.1:8000/api/bookings/', { headers: { Authorization: `Bearer ${token}` } }).then(res => res.json()),
-      fetch('http://127.0.0.1:8000/api/rooms/', { headers: { Authorization: `Bearer ${token}` } }).then(res => res.json()),
-      fetch('http://127.0.0.1:8000/api/guests/', { headers: { Authorization: `Bearer ${token}` } }).then(res => res.json())
+      fetch(`${API_URL}/api/bookings/`, { headers: { Authorization: `Bearer ${token}` } }).then(res => res.json()),
+      fetch(`${API_URL}/api/rooms/`, { headers: { Authorization: `Bearer ${token}` } }).then(res => res.json()),
+      fetch(`${API_URL}/api/guests/`, { headers: { Authorization: `Bearer ${token}` } }).then(res => res.json())
     ])
       .then(([bookingsData, roomsData, guestsData]) => {
         setBookings(bookingsData);
@@ -99,7 +100,7 @@ export default function BookingsPage() {
     }
     try {
       const token = localStorage.getItem('access');
-      const res = await fetch('http://127.0.0.1:8000/api/bookings/', {
+      const res = await fetch(`${API_URL}/api/bookings/`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -121,7 +122,7 @@ export default function BookingsPage() {
         setShowAddModal(false);
         setAddForm({ room: '', guest: '', date_from: '', date_to: '' });
         // Обновить список
-        const bookingsRes = await fetch('http://127.0.0.1:8000/api/bookings/', { headers: { Authorization: `Bearer ${token}` } });
+        const bookingsRes = await fetch(`${API_URL}/api/bookings/`, { headers: { Authorization: `Bearer ${token}` } });
         setBookings(await bookingsRes.json());
       }
     } catch {
@@ -134,7 +135,7 @@ export default function BookingsPage() {
   const handleDelete = async (bookingId: number) => {
     if (!window.confirm('Удалить бронирование?')) return;
     const token = localStorage.getItem('access');
-    await fetch(`http://127.0.0.1:8000/api/bookings/${bookingId}/`, {
+    await fetch(`${API_URL}/api/bookings/${bookingId}/`, {
       method: 'DELETE',
       headers: { Authorization: `Bearer ${token}` },
     });

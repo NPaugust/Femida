@@ -3,6 +3,7 @@
 import React, { useEffect, useState } from "react";
 import { FaBed, FaUserFriends, FaCalendarCheck, FaUsers } from "react-icons/fa";
 import { useRouter } from "next/navigation";
+import { API_URL } from '../shared/api';
 
 const ROOM_CLASS_LABELS: Record<string, string> = {
   standard: "Стандарт",
@@ -30,9 +31,9 @@ export default function Dashboard() {
     }
     setLoading(true);
     Promise.all([
-      fetch("http://127.0.0.1:8000/api/rooms/", { headers: { Authorization: `Bearer ${token}` } }).then(res => res.json()),
-      fetch("http://127.0.0.1:8000/api/bookings/", { headers: { Authorization: `Bearer ${token}` } }).then(res => res.json()),
-      fetch("http://127.0.0.1:8000/api/guests/", { headers: { Authorization: `Bearer ${token}` } }).then(res => res.json()),
+      fetch(`${API_URL}/api/rooms/`, { headers: { Authorization: `Bearer ${token}` } }).then(res => res.json()),
+      fetch(`${API_URL}/api/bookings/`, { headers: { Authorization: `Bearer ${token}` } }).then(res => res.json()),
+      fetch(`${API_URL}/api/guests/`, { headers: { Authorization: `Bearer ${token}` } }).then(res => res.json()),
     ])
       .then(([roomsData, bookingsData, guestsData]) => {
         setRooms(roomsData);

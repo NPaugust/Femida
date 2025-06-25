@@ -7,6 +7,7 @@ import { saveAs } from 'file-saver';
 import { FaUser, FaEdit, FaTrash, FaFileCsv, FaPlus } from 'react-icons/fa';
 import dynamic from 'next/dynamic';
 import 'react-phone-input-2/lib/style.css';
+import { API_URL } from '../../shared/api';
 
 type Guest = {
   id: number;
@@ -51,7 +52,7 @@ export default function GuestsPage() {
       window.location.href = '/login';
       return;
     }
-    fetch('http://127.0.0.1:8000/api/guests/', {
+    fetch(`${API_URL}/api/guests/`, {
       headers: { Authorization: `Bearer ${token}` },
     })
       .then(res => res.json())
@@ -91,7 +92,7 @@ export default function GuestsPage() {
     setAddLoading(true);
     try {
       const token = localStorage.getItem('access');
-      const res = await fetch('http://127.0.0.1:8000/api/guests/', {
+      const res = await fetch(`${API_URL}/api/guests/`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -122,7 +123,7 @@ export default function GuestsPage() {
   const handleEditSave = async () => {
     if (!editGuest) return;
     const token = localStorage.getItem('access');
-    const res = await fetch(`http://127.0.0.1:8000/api/guests/${editGuest.id}/`, {
+    const res = await fetch(`${API_URL}/api/guests/${editGuest.id}/`, {
       method: 'PUT',
       headers: {
         'Content-Type': 'application/json',
@@ -144,7 +145,7 @@ export default function GuestsPage() {
   const handleDelete = async (guestId: number) => {
     if (!window.confirm('Удалить гостя?')) return;
     const token = localStorage.getItem('access');
-    await fetch(`http://127.0.0.1:8000/api/guests/${guestId}/`, {
+    await fetch(`${API_URL}/api/guests/${guestId}/`, {
       method: 'DELETE',
       headers: { Authorization: `Bearer ${token}` },
     });
