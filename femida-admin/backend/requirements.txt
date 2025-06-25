@@ -3,6 +3,6 @@ psycopg2-binary
 drf-yasg
 django-phonenumber-field
 djangorestframework
-corsheaders
+django-cors-headers
 djangorestframework-simplejwt
-jazzmin 
+django-jazzmin 
