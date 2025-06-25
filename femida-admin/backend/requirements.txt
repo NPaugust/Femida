@@ -5,4 +5,5 @@ django-phonenumber-field
 djangorestframework
 django-cors-headers
 djangorestframework-simplejwt
-django-jazzmin 
+django-jazzmin
+phonenumbers 
