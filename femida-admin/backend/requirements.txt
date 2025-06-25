@@ -1,7 +1,7 @@
 Django>=5.2.3
 psycopg2-binary
 drf-yasg
-phonenumber-field
+django-phonenumber-field
 djangorestframework
 corsheaders
 djangorestframework-simplejwt
