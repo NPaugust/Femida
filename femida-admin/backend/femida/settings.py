@@ -14,7 +14,7 @@ from pathlib import Path
 import os
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
-BASE_DIR = Path(__file__).resolve().parent  # теперь BASE_DIR = backend/Femida
+BASE_DIR = Path(__file__).resolve().parent.parent
 
 
 # Quick-start development settings - unsuitable for production
@@ -26,11 +26,7 @@ SECRET_KEY = os.environ.get('SECRET_KEY', '783c9wqt%v1u5s!0%&q-3zeihq6m3b$-eb_^$
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = True
 
-ALLOWED_HOSTS = [
-    "avgustin.pythonanywhere.com",
-    "127.0.0.1",
-    "localhost",
-]
+ALLOWED_HOSTS = os.environ.get('ALLOWED_HOSTS', 'localhost,127.0.0.1').split(',')
 
 
 # Application definition
