@@ -23,6 +23,10 @@ export default function LoginPage() {
       if (res.ok && data.access) {
         localStorage.setItem('access', data.access);
         localStorage.setItem('refresh', data.refresh);
+        localStorage.setItem('role', data.role);
+        const resUser = await fetch(`${API_URL}/api/users/me/`, { headers: { Authorization: `Bearer ${data.access}` } });
+        const user = await resUser.json();
+        localStorage.setItem('role', user.role);
         window.location.href = '/';
       } else {
         setError('Неверный логин или пароль');

@@ -23,7 +23,7 @@ class UserSerializer(serializers.ModelSerializer):
 class RoomSerializer(serializers.ModelSerializer):
     class Meta:
         model = Room
-        fields = '__all__'
+        fields = ('id', 'number', 'room_class', 'description')
 
 class GuestSerializer(serializers.ModelSerializer):
     class Meta:

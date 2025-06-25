@@ -4,15 +4,13 @@ import { useEffect, useState } from 'react';
 // @ts-ignore
 import { saveAs } from 'file-saver';
 import { useTranslation } from 'react-i18next';
-import { FaBed, FaCrown, FaStar, FaEdit, FaTrash, FaFileCsv, FaCheckCircle, FaTimesCircle, FaPlus } from 'react-icons/fa';
+import { FaBed, FaCrown, FaStar, FaEdit, FaTrash, FaFileCsv, FaCheckCircle, FaTimesCircle, FaPlus, FaUserFriends, FaUserTie, FaHome } from 'react-icons/fa';
 import { API_URL } from '../../shared/api';
 
 type Room = {
   id: number;
   number: string;
   room_class: string;
-  capacity: number;
-  floor: number;
   description: string;
 };
 
@@ -36,12 +34,20 @@ const ROOM_CLASSES = [
   { value: 'standard', label: 'Стандарт' },
   { value: 'semi_lux', label: 'Полу-люкс' },
   { value: 'lux', label: 'Люкс' },
+  { value: 'vip', label: 'ВИП' },
+  { value: 'proraba', label: 'Дом прораба' },
+  { value: 'aurora', label: 'Аврора' },
+  { value: 'domik', label: 'Домик' },
 ];
 
 const ROOM_CLASS_ICONS: Record<string, React.ReactNode> = {
   standard: <FaBed className="text-gray-500 mr-1" />,
   semi_lux: <FaStar className="text-yellow-500 mr-1" />,
   lux: <FaCrown className="text-purple-600 mr-1" />,
+  vip: <FaCrown className="text-yellow-500 mr-1" />,
+  proraba: <FaUserTie className="text-blue-700 mr-1" />,
+  aurora: <FaStar className="text-blue-400 mr-1" />,
+  domik: <FaHome className="text-green-700 mr-1" />,
 };
 
 const ROOM_CLASS_COLORS: Record<string, string> = {
@@ -54,6 +60,10 @@ const ROOM_CLASS_LABELS: Record<string, string> = {
   standard: 'Стандарт',
   semi_lux: 'Полу-люкс',
   lux: 'Люкс',
+  vip: 'ВИП',
+  proraba: 'Дом прораба',
+  aurora: 'Аврора',
+  domik: 'Домик',
 };
 
 export default function RoomsPage() {
@@ -290,7 +300,6 @@ export default function RoomsPage() {
                 <th className="px-6 py-3 text-left text-xs font-bold text-gray-700 uppercase tracking-wider">Номер комнаты</th>
                 <th className="px-6 py-3 text-left text-xs font-bold text-gray-700 uppercase tracking-wider">Класс</th>
                 <th className="px-6 py-3 text-left text-xs font-bold text-gray-700 uppercase tracking-wider">Описание</th>
-                <th className="px-6 py-3 text-left text-xs font-bold text-gray-700 uppercase tracking-wider">Статус</th>
                 <th className="px-6 py-3 text-center text-xs font-bold text-gray-700 uppercase tracking-wider">Действия</th>
               </tr>
             </thead>
@@ -306,9 +315,6 @@ export default function RoomsPage() {
                       <span className={`inline-flex items-center px-2 py-1 rounded text-sm font-semibold ${classColor}`}>{classIcon}{ROOM_CLASS_LABELS[room.room_class] || '—'}</span>
                     </td>
                     <td className="px-6 py-4 text-sm text-gray-600 min-w-[120px]">{room.description}</td>
-                    <td className="px-6 py-4">
-                      <span className={`inline-flex items-center gap-1 px-2 py-1 rounded text-xs font-semibold ${isBusy ? 'bg-red-100 text-red-700' : 'bg-green-100 text-green-700'}`}>{isBusy ? <FaTimesCircle /> : <FaCheckCircle />}{isBusy ? 'Занят' : 'Свободен'}</span>
-                    </td>
                     <td className="px-6 py-4 flex gap-2 justify-center">
                       <button onClick={() => handleEdit(room)} className="flex items-center gap-1 bg-yellow-400 hover:bg-yellow-500 text-white px-3 py-1 rounded shadow transition-all"><FaEdit />Редактировать</button>
                       <button onClick={() => handleDelete(room.id)} className="flex items-center gap-1 bg-red-600 hover:bg-red-700 text-white px-3 py-1 rounded shadow transition-all"><FaTrash />Удалить</button>

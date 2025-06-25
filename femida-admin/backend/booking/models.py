@@ -29,11 +29,13 @@ class Room(models.Model):
         ('standard', 'Стандарт'),
         ('semi_lux', 'Полу-люкс'),
         ('lux', 'Люкс'),
+        ('vip', 'ВИП'),
+        ('proraba', 'Дом прораба'),
+        ('aurora', 'Аврора'),
+        ('domik', 'Домик'),
     ]
     number = models.CharField('Номер комнаты', max_length=10, unique=True)
-    room_class = models.CharField('Класс', max_length=10, choices=ROOM_CLASS_CHOICES)
-    capacity = models.PositiveIntegerField('Вместимость', default=1)
-    floor = models.PositiveIntegerField('Этаж', default=1)
+    room_class = models.CharField('Класс', max_length=20, choices=ROOM_CLASS_CHOICES)
     description = models.TextField('Описание', blank=True)
 
     def __str__(self):
@@ -68,3 +70,18 @@ class Booking(models.Model):
     class Meta:
         verbose_name = 'Бронирование'
         verbose_name_plural = 'Бронирования'
+
+# Пример для импорта номеров с подробными описаниями:
+rooms = [
+    {"number": "№1", "room_class": "standard", "description": "3 комнаты: 2x3-местн, 1x2-местн"},
+    {"number": "№2", "room_class": "standard", "description": "3 комнаты: 2x3-местн, 1x2-местн"},
+    {"number": "№3", "room_class": "standard", "description": "3 комнаты: 2x3-местн, 1x2-местн"},
+    {"number": "№4", "room_class": "standard", "description": "3 комнаты: 2x3-местн, 1x2-местн"},
+    {"number": "№5", "room_class": "standard", "description": "3 комнаты: 2x3-местн, 1x2-местн"},
+    {"number": "№6", "room_class": "standard", "description": "3 комнаты: 2x3-местн, 1x2-местн"},
+    {"number": "№7", "room_class": "standard", "description": "3 комнаты: 2x3-местн, 1x2-местн"},
+    {"number": "№8", "room_class": "standard", "description": "Не работает"},
+    {"number": "№9", "room_class": "standard", "description": "3 комнаты: 2x3-местн, 1x2-местн"},
+    {"number": "№10", "room_class": "standard", "description": "3 комнаты: 2x3-местн, 1x2-местн"},
+    # ... остальные номера с подробными описаниями ...
+]

@@ -77,7 +77,10 @@ export default function UsersPage() {
           }
           return res.json();
         })
-        .then(data => setUsers(data))
+        .then(data => {
+          setUsers(data);
+          localStorage.setItem('role', data[0].role);
+        })
         .catch(() => setError('Ошибка загрузки пользователей'));
     };
 
@@ -160,7 +163,10 @@ export default function UsersPage() {
           headers: { Authorization: `Bearer ${token}` },
         })
           .then(res => res.json())
-          .then(data => setUsers(data));
+          .then(data => {
+            setUsers(data);
+            localStorage.setItem('role', data[0].role);
+          });
       }
     } catch (e) {
       setAddError('Ошибка сети');
@@ -195,7 +201,10 @@ export default function UsersPage() {
       headers: { Authorization: `Bearer ${token}` },
     })
       .then(res => res.json())
-      .then(data => setUsers(data));
+      .then(data => {
+        setUsers(data);
+        localStorage.setItem('role', data[0].role);
+      });
   };
 
   // Фильтрация пользователей
