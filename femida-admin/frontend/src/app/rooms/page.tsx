@@ -121,13 +121,16 @@ export default function RoomsPage() {
   const [selectedDeleteId, setSelectedDeleteId] = useState<number | null>(null);
   const [showConfirmDeleteBuilding, setShowConfirmDeleteBuilding] = useState(false);
   const [selectedDeleteBuildingId, setSelectedDeleteBuildingId] = useState<number | null>(null);
+  const [token, setToken] = useState<string | null>(null);
 
   useEffect(() => {
-    const token = localStorage.getItem('access');
-    if (!token) {
-      window.location.href = '/login';
-      return;
+    if (typeof window !== 'undefined') {
+      setToken(localStorage.getItem('access'));
     }
+  }, []);
+
+  useEffect(() => {
+    if (!token) return;
     setLoading(true);
     Promise.all([
       fetch(`${API_URL}/api/rooms/`, { headers: { Authorization: `Bearer ${token}` } }).then(res => res.json()),
@@ -154,7 +157,7 @@ export default function RoomsPage() {
     if (searchParams.get('number')) {
       setSearch(searchParams.get('number') || '');
     }
-  }, [searchParams]);
+  }, [searchParams, token]);
 
   const roomsArray = Array.isArray(rooms) ? rooms : [];
 

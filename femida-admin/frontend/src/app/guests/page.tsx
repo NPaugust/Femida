@@ -49,6 +49,13 @@ export default function GuestsPage() {
   const [sortState, setSortState] = useState<{ field: string | null; order: 'asc' | 'desc' | null }>({ field: null, order: null });
   const [showConfirmDelete, setShowConfirmDelete] = useState(false);
   const [selectedDeleteId, setSelectedDeleteId] = useState<number | null>(null);
+  const [token, setToken] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      setToken(localStorage.getItem('access'));
+    }
+  }, []);
 
   useEffect(() => {
     setLoading(true);
@@ -61,7 +68,6 @@ export default function GuestsPage() {
   }, [success, searchParams]);
 
   const fetchGuests = () => {
-    const token = localStorage.getItem('access');
     if (!token) {
       window.location.href = '/login';
       return;
@@ -106,7 +112,6 @@ export default function GuestsPage() {
     if (Object.keys(errors).length > 0) return;
     setAddLoading(true);
     try {
-      const token = localStorage.getItem('access');
       const res = await fetch(`${API_URL}/api/guests/`, {
         method: 'POST',
         headers: {
@@ -140,7 +145,6 @@ export default function GuestsPage() {
 
   const handleEditSave = async () => {
     if (!editGuest) return;
-    const token = localStorage.getItem('access');
     const res = await fetch(`${API_URL}/api/guests/${editGuest.id}/`, {
       method: 'PUT',
       headers: {
@@ -167,7 +171,6 @@ export default function GuestsPage() {
 
   const confirmDelete = async () => {
     if (!selectedDeleteId) return;
-    const token = localStorage.getItem('access');
     const res = await fetch(`${API_URL}/api/guests/${selectedDeleteId}/`, {
       method: 'DELETE',
       headers: { Authorization: `Bearer ${token}` },
