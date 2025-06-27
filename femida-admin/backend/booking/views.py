@@ -1,7 +1,7 @@
 from django.shortcuts import render
 from rest_framework import viewsets, permissions
-from .models import User, Room, Guest, Booking
-from .serializers import UserSerializer, RoomSerializer, GuestSerializer, BookingSerializer
+from .models import Building, Room, Guest, Booking, AuditLog, User
+from .serializers import BuildingSerializer, RoomSerializer, GuestSerializer, BookingSerializer, AuditLogSerializer, UserSerializer
 from rest_framework_simplejwt.views import TokenObtainPairView, TokenRefreshView
 from rest_framework.decorators import action
 from rest_framework.response import Response
@@ -19,6 +19,11 @@ class UserViewSet(viewsets.ModelViewSet):
     def me(self, request):
         serializer = self.get_serializer(request.user)
         return Response(serializer.data)
+
+class BuildingViewSet(viewsets.ModelViewSet):
+    queryset = Building.objects.all()
+    serializer_class = BuildingSerializer
+    permission_classes = [permissions.IsAuthenticated]
 
 class RoomViewSet(viewsets.ModelViewSet):
     queryset = Room.objects.all()
@@ -47,4 +52,12 @@ class GuestViewSet(viewsets.ModelViewSet):
 class BookingViewSet(viewsets.ModelViewSet):
     queryset = Booking.objects.all()
     serializer_class = BookingSerializer
+    permission_classes = [permissions.IsAuthenticated]
+
+    def perform_create(self, serializer):
+        serializer.save(created_by=self.request.user)
+
+class AuditLogViewSet(viewsets.ModelViewSet):
+    queryset = AuditLog.objects.all().order_by('-timestamp')
+    serializer_class = AuditLogSerializer
     permission_classes = [permissions.IsAuthenticated]

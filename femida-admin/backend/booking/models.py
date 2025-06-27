@@ -1,6 +1,8 @@
 from django.contrib.auth.models import AbstractUser
 from django.db import models
 from phonenumber_field.modelfields import PhoneNumberField
+from django.db.models.signals import post_save, post_delete
+from django.dispatch import receiver
 
 class User(AbstractUser):
     ROLE_CHOICES = [
@@ -24,64 +26,146 @@ class User(AbstractUser):
         verbose_name = 'Сотрудник'
         verbose_name_plural = 'Сотрудники'
 
-class Room(models.Model):
-    ROOM_CLASS_CHOICES = [
-        ('standard', 'Стандарт'),
-        ('semi_lux', 'Полу-люкс'),
-        ('lux', 'Люкс'),
-        ('vip', 'ВИП'),
-        ('proraba', 'Дом прораба'),
-        ('aurora', 'Аврора'),
-        ('domik', 'Домик'),
-    ]
-    number = models.CharField('Номер комнаты', max_length=10, unique=True)
-    room_class = models.CharField('Класс', max_length=20, choices=ROOM_CLASS_CHOICES)
-    description = models.TextField('Описание', blank=True)
+class Building(models.Model):
+    name = models.CharField(max_length=100, verbose_name="Название корпуса")
+    address = models.CharField(max_length=255, verbose_name="Адрес")
 
     def __str__(self):
-        return f"{self.get_room_class_display()} №{self.number}"
+        return self.name
 
-    class Meta:
-        verbose_name = 'Номер'
-        verbose_name_plural = 'Номера'
+class Room(models.Model):
+    building = models.ForeignKey(Building, on_delete=models.CASCADE, related_name="rooms", verbose_name="Корпус")
+    number = models.CharField(max_length=10, verbose_name="Номер комнаты")
+    capacity = models.PositiveIntegerField(verbose_name="Вместимость")
+    room_type = models.CharField(max_length=50, verbose_name="Тип комнаты")
+    room_class = models.CharField(
+        max_length=40,
+        choices=[
+            ('standard', 'Стандарт'),
+            ('lux', 'Люкс'),
+            ('semi_lux', 'Полу-люкс'),
+            ('vip', 'ВИП'),
+            ('proraba', 'Дом прораба'),
+            ('aurora', 'Аврора'),
+            ('domik', 'Домик'),
+            ('three_floor_lux', '3-х этажка люкс'),
+            ('middle_vip_lux', 'Средний ВИП люкс'),
+            ('pink', 'Розовый'),
+            ('sklad', 'Склад'),
+            ('other', 'Другое'),
+        ],
+        default='standard',
+        verbose_name="Класс комнаты"
+    )
+    status = models.CharField(
+        max_length=20,
+        choices=[('free', 'Свободен'), ('busy', 'Занят'), ('repair', 'На ремонте')],
+        default='free',
+        verbose_name="Статус"
+    )
+    description = models.TextField(blank=True, verbose_name="Описание")
+
+    def __str__(self):
+        return f"{self.building.name} - {self.number}"
 
 class Guest(models.Model):
-    full_name = models.CharField('ФИО', max_length=255)
-    inn = models.CharField('ИНН', max_length=20)
-    phone = PhoneNumberField('Телефон')
+    full_name = models.CharField(max_length=100, verbose_name="ФИО")
+    phone = models.CharField(max_length=20, verbose_name="Телефон")
+    people_count = models.PositiveIntegerField(default=1, verbose_name="Количество человек")
+    notes = models.TextField(blank=True, verbose_name="Примечания")
+    inn = models.CharField(max_length=20, blank=True, verbose_name="ИНН")
 
     def __str__(self):
         return self.full_name
 
-    class Meta:
-        verbose_name = 'Гость'
-        verbose_name_plural = 'Гости'
-
 class Booking(models.Model):
-    room = models.ForeignKey(Room, on_delete=models.CASCADE, verbose_name='Комната')
-    guest = models.ForeignKey(Guest, on_delete=models.CASCADE, verbose_name='Гость')
-    date_from = models.DateField('Дата заезда')
-    date_to = models.DateField('Дата выезда')
-    created_at = models.DateTimeField('Создано', auto_now_add=True)
+    guest = models.ForeignKey(Guest, on_delete=models.CASCADE, related_name="bookings", verbose_name="Гость")
+    room = models.ForeignKey(Room, on_delete=models.CASCADE, related_name="bookings", verbose_name="Комната")
+    check_in = models.DateField(verbose_name="Дата заезда")
+    check_out = models.DateField(verbose_name="Дата выезда")
+    people_count = models.PositiveIntegerField(verbose_name="Количество гостей")
+    status = models.CharField(
+        max_length=20,
+        choices=[('active', 'Активно'), ('completed', 'Завершено'), ('cancelled', 'Отменено')],
+        default='active',
+        verbose_name="Статус"
+    )
+    created_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, verbose_name="Кто создал")
+    created_at = models.DateTimeField(auto_now_add=True, verbose_name="Создано")
 
     def __str__(self):
-        return f"{self.room} — {self.guest} ({self.date_from} - {self.date_to})"
+        return f"{self.guest.full_name} - {self.room} ({self.check_in} - {self.check_out})"
 
-    class Meta:
-        verbose_name = 'Бронирование'
-        verbose_name_plural = 'Бронирования'
+class AuditLog(models.Model):
+    user = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, verbose_name="Пользователь")
+    action = models.CharField(max_length=100, verbose_name="Действие")
+    object_type = models.CharField(max_length=100, verbose_name="Тип объекта")
+    object_id = models.PositiveIntegerField(verbose_name="ID объекта")
+    timestamp = models.DateTimeField(auto_now_add=True, verbose_name="Время")
+    details = models.TextField(blank=True, verbose_name="Детали")
 
-# Пример для импорта номеров с подробными описаниями:
-rooms = [
-    {"number": "№1", "room_class": "standard", "description": "3 комнаты: 2x3-местн, 1x2-местн"},
-    {"number": "№2", "room_class": "standard", "description": "3 комнаты: 2x3-местн, 1x2-местн"},
-    {"number": "№3", "room_class": "standard", "description": "3 комнаты: 2x3-местн, 1x2-местн"},
-    {"number": "№4", "room_class": "standard", "description": "3 комнаты: 2x3-местн, 1x2-местн"},
-    {"number": "№5", "room_class": "standard", "description": "3 комнаты: 2x3-местн, 1x2-местн"},
-    {"number": "№6", "room_class": "standard", "description": "3 комнаты: 2x3-местн, 1x2-местн"},
-    {"number": "№7", "room_class": "standard", "description": "3 комнаты: 2x3-местн, 1x2-местн"},
-    {"number": "№8", "room_class": "standard", "description": "Не работает"},
-    {"number": "№9", "room_class": "standard", "description": "3 комнаты: 2x3-местн, 1x2-местн"},
-    {"number": "№10", "room_class": "standard", "description": "3 комнаты: 2x3-местн, 1x2-местн"},
-    # ... остальные номера с подробными описаниями ...
-]
+    def __str__(self):
+        return f"{self.user} {self.action} {self.object_type} {self.object_id} {self.timestamp}"
+
+@receiver(post_save, sender=Booking)
+def log_booking_save(sender, instance, created, **kwargs):
+    action = 'Создание' if created else 'Изменение'
+    AuditLog.objects.create(
+        user=instance.created_by,
+        action=action,
+        object_type='Booking',
+        object_id=instance.id,
+        details=f'Бронирование: {instance.guest} в {instance.room} с {instance.check_in} по {instance.check_out}, гостей: {instance.people_count}'
+    )
+
+@receiver(post_delete, sender=Booking)
+def log_booking_delete(sender, instance, **kwargs):
+    AuditLog.objects.create(
+        user=instance.created_by,
+        action='Удаление',
+        object_type='Booking',
+        object_id=instance.id,
+        details=f'Удалено бронирование: {instance.guest} в {instance.room} с {instance.check_in} по {instance.check_out}, гостей: {instance.people_count}'
+    )
+
+@receiver(post_save, sender=Room)
+def log_room_save(sender, instance, created, **kwargs):
+    action = 'Создание' if created else 'Изменение'
+    AuditLog.objects.create(
+        user=None,
+        action=action,
+        object_type='Room',
+        object_id=instance.id,
+        details=f'Комната: {instance.building} {instance.number}, вместимость: {instance.capacity}, тип: {instance.room_type}, статус: {instance.status}'
+    )
+
+@receiver(post_delete, sender=Room)
+def log_room_delete(sender, instance, **kwargs):
+    AuditLog.objects.create(
+        user=None,
+        action='Удаление',
+        object_type='Room',
+        object_id=instance.id,
+        details=f'Удалена комната: {instance.building} {instance.number}, вместимость: {instance.capacity}, тип: {instance.room_type}, статус: {instance.status}'
+    )
+
+@receiver(post_save, sender=Guest)
+def log_guest_save(sender, instance, created, **kwargs):
+    action = 'Создание' if created else 'Изменение'
+    AuditLog.objects.create(
+        user=None,
+        action=action,
+        object_type='Guest',
+        object_id=instance.id,
+        details=f'Гость: {instance.full_name}, телефон: {instance.phone}, людей: {instance.people_count}'
+    )
+
+@receiver(post_delete, sender=Guest)
+def log_guest_delete(sender, instance, **kwargs):
+    AuditLog.objects.create(
+        user=None,
+        action='Удаление',
+        object_type='Guest',
+        object_id=instance.id,
+        details=f'Удалён гость: {instance.full_name}, телефон: {instance.phone}, людей: {instance.people_count}'
+    )

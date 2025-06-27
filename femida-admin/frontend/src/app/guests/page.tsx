@@ -8,6 +8,7 @@ import { FaUser, FaEdit, FaTrash, FaFileCsv, FaPlus } from 'react-icons/fa';
 import dynamic from 'next/dynamic';
 import 'react-phone-input-2/lib/style.css';
 import { API_URL } from '../../shared/api';
+import { useSearchParams } from 'next/navigation';
 
 type Guest = {
   id: number;
@@ -20,7 +21,8 @@ const PhoneInput: any = dynamic(() => import('react-phone-input-2').then(mod => 
 
 export default function GuestsPage() {
   const { t } = useTranslation();
-  const [guests, setGuests] = useState<Guest[]>([]);
+  const [guests, setGuests] = useState<any[]>([]);
+  const [bookings, setBookings] = useState<any[]>([]);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
   const [fullName, setFullName] = useState('');
@@ -40,11 +42,20 @@ export default function GuestsPage() {
   const [addError, setAddError] = useState('');
   const [addSuccess, setAddSuccess] = useState('');
   const [addFieldErrors, setAddFieldErrors] = useState<{[k:string]: string}>({});
+  const [currentPage, setCurrentPage] = useState(1);
+  const guestsPerPage = 10;
+  const searchParams = useSearchParams();
+  const [sortState, setSortState] = useState<{ field: string | null; order: 'asc' | 'desc' | null }>({ field: null, order: null });
 
   useEffect(() => {
     setLoading(true);
     fetchGuests();
-  }, [success]);
+    if (searchParams.get('add') === '1') {
+      setShowAddModal(true);
+    } else {
+      setShowAddModal(false);
+    }
+  }, [success, searchParams]);
 
   const fetchGuests = () => {
     const token = localStorage.getItem('access');
@@ -52,12 +63,13 @@ export default function GuestsPage() {
       window.location.href = '/login';
       return;
     }
-    fetch(`${API_URL}/api/guests/`, {
-      headers: { Authorization: `Bearer ${token}` },
-    })
-      .then(res => res.json())
-      .then(data => {
-        setGuests(data);
+    Promise.all([
+      fetch(`${API_URL}/api/guests/`, { headers: { Authorization: `Bearer ${token}` } }).then(res => res.json()),
+      fetch(`${API_URL}/api/bookings/`, { headers: { Authorization: `Bearer ${token}` } }).then(res => res.json()),
+    ])
+      .then(([guestsData, bookingsData]) => {
+        setGuests(guestsData);
+        setBookings(bookingsData);
         setLoading(false);
       })
       .catch(() => {
@@ -118,6 +130,9 @@ export default function GuestsPage() {
 
   const handleEdit = (guest: Guest) => {
     setEditGuest(guest);
+    setFullName(guest.full_name);
+    setInn(guest.inn);
+    setPhone(guest.phone);
   };
 
   const handleEditSave = async () => {
@@ -145,16 +160,48 @@ export default function GuestsPage() {
   const handleDelete = async (guestId: number) => {
     if (!window.confirm('Удалить гостя?')) return;
     const token = localStorage.getItem('access');
-    await fetch(`${API_URL}/api/guests/${guestId}/`, {
+    const res = await fetch(`${API_URL}/api/guests/${guestId}/`, {
       method: 'DELETE',
       headers: { Authorization: `Bearer ${token}` },
     });
-    setSuccess('Гость удалён');
-    fetchGuests();
+    if (res.ok) {
+      setSuccess('Гость удалён');
+      fetchGuests();
+    }
   };
 
-  const filteredGuests = guests.filter(g =>
+  const guestsArray = Array.isArray(guests) ? guests : [];
+  const filteredGuests = guestsArray.filter(g =>
     (search ? g.full_name.toLowerCase().includes(search.toLowerCase()) : true)
+  );
+
+  const handleSort = (field: string) => {
+    setSortState(prev => {
+      if (prev.field !== field) return { field, order: 'asc' };
+      if (prev.order === 'asc') return { field, order: 'desc' };
+      if (prev.order === 'desc') return { field: null, order: null };
+      return { field, order: 'asc' };
+    });
+  };
+
+  const sortedGuests = [...filteredGuests];
+  if (sortState.field && sortState.order) {
+    sortedGuests.sort((a, b) => {
+      let aValue = a[sortState.field!];
+      let bValue = b[sortState.field!];
+      if (typeof aValue === 'string') aValue = aValue.toLowerCase();
+      if (typeof bValue === 'string') bValue = bValue.toLowerCase();
+      if (aValue < bValue) return sortState.order === 'asc' ? -1 : 1;
+      if (aValue > bValue) return sortState.order === 'asc' ? 1 : -1;
+      return 0;
+    });
+  }
+
+  // Пагинация
+  const totalPages = Math.ceil(filteredGuests.length / guestsPerPage);
+  const paginatedGuests = filteredGuests.slice(
+    (currentPage - 1) * guestsPerPage,
+    currentPage * guestsPerPage
   );
 
   const exportToCSV = () => {
@@ -167,10 +214,14 @@ export default function GuestsPage() {
     saveAs(blob, 'guests.csv');
   };
 
+  const getBookingCount = (guestId: number) => {
+    return bookings.filter(b => b.guest?.id === guestId).length;
+  };
+
   return (
     <div className="p-8">
       <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 mb-6">
-        <h1 className="text-2xl font-bold">{t('Посетители')}</h1>
+        <h1 className="text-2xl font-bold">{t('Список гостей')}</h1>
         <div className="flex gap-2 items-center bg-white rounded-lg shadow px-4 py-2">
           <input
             type="text"
@@ -180,7 +231,7 @@ export default function GuestsPage() {
             className="input w-48"
           />
           <button onClick={exportToCSV} className="flex items-center gap-2 bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded shadow transition-all duration-200">
-            <FaFileCsv /> Экспорт
+            <FaFileCsv /> Экспорт в CSV
           </button>
           <button
             onClick={() => setShowAddModal(true)}
@@ -253,41 +304,60 @@ export default function GuestsPage() {
         <div className="text-red-500 mb-4">{error}</div>
       ) : (
         <div className="space-y-3">
-          {filteredGuests.map(guest => (
-            <div
-              key={guest.id}
-              className="flex items-center gap-6 bg-white rounded-xl shadow px-6 py-4 hover:shadow-lg transition-all border border-gray-100"
-            >
-              <div className="flex items-center gap-4 min-w-[180px]">
-                <div className="w-12 h-12 rounded-full bg-blue-100 flex items-center justify-center text-blue-600 text-2xl font-bold">
-                  <FaUser />
-                </div>
-                <div>
-                  <div className="font-bold text-lg">{guest.full_name}</div>
-                  <div className="text-xs text-gray-400">ID: {guest.id}</div>
-                </div>
-              </div>
-              <div className="flex-1 grid grid-cols-2 md:grid-cols-4 gap-2">
-                <div>
-                  <div className="text-xs text-gray-500">ИНН</div>
-                  <div className="font-semibold">{guest.inn}</div>
-                </div>
-                <div>
-                  <div className="text-xs text-gray-500">Телефон</div>
-                  <div className="font-semibold">{guest.phone}</div>
-                </div>
-              </div>
-              <div className="flex gap-2 ml-auto">
-                <button onClick={() => {
-                  setEditGuest(guest);
-                  setFullName(guest.full_name);
-                  setInn(guest.inn);
-                  setPhone(guest.phone);
-                }} className="flex items-center gap-1 bg-yellow-400 hover:bg-yellow-500 text-white px-3 py-1 rounded shadow transition-all"><FaEdit />Редактировать</button>
-                <button onClick={() => handleDelete(guest.id)} className="flex items-center gap-1 bg-red-600 hover:bg-red-700 text-white px-3 py-1 rounded shadow transition-all"><FaTrash />Удалить</button>
-              </div>
+          <table className="min-w-full bg-white rounded-lg shadow">
+            <thead>
+              <tr className="bg-gray-50 text-gray-700">
+                <th className="p-3 text-left" onClick={() => handleSort('full_name')}>ФИО {sortState.field === 'full_name' && (sortState.order === 'asc' ? '▲' : sortState.order === 'desc' ? '▼' : '')}</th>
+                <th className="p-3 text-left" onClick={() => handleSort('inn')}>ИНН {sortState.field === 'inn' && (sortState.order === 'asc' ? '▲' : sortState.order === 'desc' ? '▼' : '')}</th>
+                <th className="p-3 text-left" onClick={() => handleSort('phone')}>Телефон {sortState.field === 'phone' && (sortState.order === 'asc' ? '▲' : sortState.order === 'desc' ? '▼' : '')}</th>
+                <th className="p-3 text-left">Бронирования</th>
+                <th className="p-3 text-left">Действия</th>
+              </tr>
+            </thead>
+            <tbody>
+              {sortedGuests.map(guest => (
+                <tr key={guest.id} className="hover:bg-blue-50 transition-all">
+                  <td className="p-3 font-semibold">{guest.full_name}</td>
+                  <td className="p-3">{guest.inn}</td>
+                  <td className="p-3">{guest.phone}</td>
+                  <td className="p-3">
+                    <span className="inline-block px-2 py-1 rounded-full text-xs font-semibold bg-blue-100 text-blue-800">
+                      {getBookingCount(guest.id)}
+                    </span>
+                  </td>
+                  <td className="p-3 flex gap-2">
+                    <button onClick={() => handleEdit(guest)} className="text-yellow-600 hover:text-yellow-800">
+                      <FaEdit />
+                    </button>
+                    <button onClick={() => handleDelete(guest.id)} className="text-red-600 hover:text-red-800">
+                      <FaTrash />
+                    </button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+          
+          {/* Пагинация */}
+          {totalPages > 1 && (
+            <div className="flex justify-center items-center gap-2 mt-4">
+              <button
+                className="px-3 py-1 rounded bg-gray-100 hover:bg-gray-200 text-gray-700 disabled:opacity-50"
+                onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                disabled={currentPage === 1}
+              >
+                Назад
+              </button>
+              <span className="text-sm text-gray-500">Страница {currentPage} из {totalPages}</span>
+              <button
+                className="px-3 py-1 rounded bg-gray-100 hover:bg-gray-200 text-gray-700 disabled:opacity-50"
+                onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+                disabled={currentPage === totalPages}
+              >
+                Вперёд
+              </button>
             </div>
-          ))}
+          )}
         </div>
       )}
       {editGuest && (
