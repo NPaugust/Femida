@@ -470,8 +470,12 @@ export default function BookingsPage() {
     const pending = filteredBookings.filter(b => b.payment_status === 'pending').length;
     const partial = filteredBookings.filter(b => b.payment_status === 'partial').length;
     const totalAmount = filteredBookings.reduce((sum, b) => sum + Number(b.total_amount || 0), 0);
-    const paidAmount = filteredBookings.filter(b => b.payment_status === 'paid').reduce((sum, b) => sum + Number(b.payment_amount || 0), 0);
-    
+    // Оплаченная сумма — сумма payment_amount для всех paid и partial
+    const paidAmount = filteredBookings
+      .filter(b => b.payment_status === 'paid' || b.payment_status === 'partial')
+      .reduce((sum, b) => sum + Number(b.payment_amount || 0), 0);
+    // Процент оплаты — отношение оплаченной суммы к общей сумме (только если общая сумма > 0)
+    const amountPercentage = totalAmount > 0 ? Math.round((paidAmount / totalAmount) * 100) : 0;
     return {
       total,
       paid,
@@ -480,7 +484,7 @@ export default function BookingsPage() {
       totalAmount,
       paidAmount,
       paidPercentage: total > 0 ? Math.round((paid / total) * 100) : 0,
-      amountPercentage: totalAmount > 0 ? Math.round((paidAmount / totalAmount) * 100) : 0,
+      amountPercentage,
     };
   };
 
