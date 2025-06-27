@@ -9,6 +9,7 @@ import dynamic from 'next/dynamic';
 import 'react-phone-input-2/lib/style.css';
 import { API_URL } from '../../shared/api';
 import { useSearchParams } from 'next/navigation';
+import ConfirmModal from '../../components/ConfirmModal';
 
 type Guest = {
   id: number;
@@ -46,6 +47,8 @@ export default function GuestsPage() {
   const guestsPerPage = 10;
   const searchParams = useSearchParams();
   const [sortState, setSortState] = useState<{ field: string | null; order: 'asc' | 'desc' | null }>({ field: null, order: null });
+  const [showConfirmDelete, setShowConfirmDelete] = useState(false);
+  const [selectedDeleteId, setSelectedDeleteId] = useState<number | null>(null);
 
   useEffect(() => {
     setLoading(true);
@@ -158,9 +161,14 @@ export default function GuestsPage() {
   };
 
   const handleDelete = async (guestId: number) => {
-    if (!window.confirm('Удалить гостя?')) return;
+    setSelectedDeleteId(guestId);
+    setShowConfirmDelete(true);
+  };
+
+  const confirmDelete = async () => {
+    if (!selectedDeleteId) return;
     const token = localStorage.getItem('access');
-    const res = await fetch(`${API_URL}/api/guests/${guestId}/`, {
+    const res = await fetch(`${API_URL}/api/guests/${selectedDeleteId}/`, {
       method: 'DELETE',
       headers: { Authorization: `Bearer ${token}` },
     });
@@ -168,6 +176,8 @@ export default function GuestsPage() {
       setSuccess('Гость удалён');
       fetchGuests();
     }
+    setShowConfirmDelete(false);
+    setSelectedDeleteId(null);
   };
 
   const guestsArray = Array.isArray(guests) ? guests : [];
@@ -326,12 +336,8 @@ export default function GuestsPage() {
                     </span>
                   </td>
                   <td className="p-3 flex gap-2">
-                    <button onClick={() => handleEdit(guest)} className="text-yellow-600 hover:text-yellow-800">
-                      <FaEdit />
-                    </button>
-                    <button onClick={() => handleDelete(guest.id)} className="text-red-600 hover:text-red-800">
-                      <FaTrash />
-                    </button>
+                    <button onClick={() => handleEdit(guest)} className="text-yellow-600 hover:text-yellow-800" title="Редактировать"><FaEdit /></button>
+                    <button onClick={() => handleDelete(guest.id)} className="text-red-600 hover:text-red-800" title="Удалить"><FaTrash /></button>
                   </td>
                 </tr>
               ))}
@@ -385,6 +391,15 @@ export default function GuestsPage() {
           </div>
         </div>
       )}
+      <ConfirmModal
+        open={showConfirmDelete}
+        title="Удалить гостя?"
+        description="Вы действительно хотите удалить этого гостя? Это действие необратимо."
+        confirmText="Удалить"
+        cancelText="Отмена"
+        onConfirm={confirmDelete}
+        onCancel={() => { setShowConfirmDelete(false); setSelectedDeleteId(null); }}
+      />
     </div>
   );
 }

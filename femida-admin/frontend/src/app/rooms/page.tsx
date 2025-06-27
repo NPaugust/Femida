@@ -7,6 +7,7 @@ import { useTranslation } from 'react-i18next';
 import { FaBed, FaCrown, FaStar, FaEdit, FaTrash, FaFileCsv, FaCheckCircle, FaTimesCircle, FaPlus, FaUserFriends, FaUserTie, FaHome } from 'react-icons/fa';
 import { API_URL } from '../../shared/api';
 import { useSearchParams } from 'next/navigation';
+import ConfirmModal from '../../components/ConfirmModal';
 
 type Room = {
   id: number;
@@ -116,6 +117,8 @@ export default function RoomsPage() {
   const [editType, setEditType] = useState('');
   const [sortState, setSortState] = useState<{ field: string | null; order: 'asc' | 'desc' | null }>({ field: null, order: null });
   const searchParams = useSearchParams();
+  const [showConfirmDelete, setShowConfirmDelete] = useState(false);
+  const [selectedDeleteId, setSelectedDeleteId] = useState<number | null>(null);
 
   useEffect(() => {
     const token = localStorage.getItem('access');
@@ -226,12 +229,19 @@ export default function RoomsPage() {
   };
 
   const handleDelete = async (roomId: number) => {
-    if (!window.confirm('Удалить номер?')) return;
+    setSelectedDeleteId(roomId);
+    setShowConfirmDelete(true);
+  };
+
+  const confirmDelete = async () => {
+    if (!selectedDeleteId) return;
     const token = localStorage.getItem('access');
-    await fetch(`${API_URL}/api/rooms/${roomId}/`, {
+    await fetch(`${API_URL}/api/rooms/${selectedDeleteId}/`, {
       method: 'DELETE',
       headers: { Authorization: `Bearer ${token}` },
     });
+    setShowConfirmDelete(false);
+    setSelectedDeleteId(null);
     window.location.reload();
   };
 
@@ -588,8 +598,8 @@ export default function RoomsPage() {
                     </td>
                     <td className="px-4 py-4 whitespace-nowrap text-xs text-gray-500 max-w-[220px] truncate" title={room.description || ''}>{room.description || '-'}</td>
                     <td className="px-4 py-4 whitespace-nowrap flex gap-2">
-                      <button onClick={() => handleEdit(room)} className="text-yellow-600 hover:text-yellow-800"><FaEdit /></button>
-                      <button onClick={() => handleDelete(room.id)} className="text-red-600 hover:text-red-800"><FaTrash /></button>
+                      <button onClick={() => handleEdit(room)} className="text-yellow-600 hover:text-yellow-800" title="Редактировать"><FaEdit /></button>
+                      <button onClick={() => handleDelete(room.id)} className="text-red-600 hover:text-red-800" title="Удалить"><FaTrash /></button>
                     </td>
                   </tr>
                 );
@@ -618,6 +628,15 @@ export default function RoomsPage() {
           )}
         </div>
       )}
+      <ConfirmModal
+        open={showConfirmDelete}
+        title="Удалить номер?"
+        description="Вы действительно хотите удалить этот номер? Это действие необратимо."
+        confirmText="Удалить"
+        cancelText="Отмена"
+        onConfirm={confirmDelete}
+        onCancel={() => { setShowConfirmDelete(false); setSelectedDeleteId(null); }}
+      />
     </div>
   );
 }

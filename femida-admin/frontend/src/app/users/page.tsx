@@ -9,6 +9,7 @@ import { FaFileCsv, FaUserShield, FaUserCog, FaUserTie, FaPlus, FaEdit, FaTrash 
 import PhoneInput from 'react-phone-input-2';
 import 'react-phone-input-2/lib/style.css';
 import { API_URL } from '../../shared/api';
+import ConfirmModal from '../../components/ConfirmModal';
 
 type User = {
   id: number;
@@ -59,6 +60,8 @@ export default function UsersPage() {
   const [deleteUserId, setDeleteUserId] = useState<number|null>(null);
   const [currentPage, setCurrentPage] = useState(1);
   const usersPerPage = 10;
+  const [showConfirmDelete, setShowConfirmDelete] = useState(false);
+  const [selectedDeleteId, setSelectedDeleteId] = useState<number | null>(null);
 
   const fetchUsers = async () => {
     try {
@@ -224,15 +227,18 @@ export default function UsersPage() {
   };
 
   const handleDeleteUser = async (userId: number) => {
-    if (!window.confirm('Удалить пользователя?')) return;
-    
+    setSelectedDeleteId(userId);
+    setShowConfirmDelete(true);
+  };
+
+  const confirmDelete = async () => {
+    if (!selectedDeleteId) return;
     try {
       const token = localStorage.getItem('access');
-      const res = await fetch(`${API_URL}/api/users/${userId}/`, {
+      const res = await fetch(`${API_URL}/api/users/${selectedDeleteId}/`, {
         method: 'DELETE',
         headers: { Authorization: `Bearer ${token}` },
       });
-      
       if (res.ok) {
         await fetchUsers();
       } else {
@@ -241,6 +247,8 @@ export default function UsersPage() {
     } catch (e) {
       setError('Ошибка сети');
     }
+    setShowConfirmDelete(false);
+    setSelectedDeleteId(null);
   };
 
   // Фильтрация пользователей
@@ -442,11 +450,11 @@ export default function UsersPage() {
                 </td>
                 <td className="p-3">
                   <div className="flex gap-2">
-                    <button onClick={() => openEditModal(user)} className="flex items-center gap-1 bg-yellow-400 hover:bg-yellow-500 text-white px-3 py-1 rounded shadow transition-all">
-                      <FaEdit /> Редактировать
+                    <button onClick={() => openEditModal(user)} className="text-yellow-600 hover:text-yellow-800" title="Редактировать">
+                      <FaEdit />
                     </button>
-                    <button onClick={() => handleDeleteUser(user.id)} className="flex items-center gap-1 bg-red-600 hover:bg-red-700 text-white px-3 py-1 rounded shadow transition-all">
-                      <FaTrash /> Удалить
+                    <button onClick={() => handleDeleteUser(user.id)} className="text-red-600 hover:text-red-800" title="Удалить">
+                      <FaTrash />
                     </button>
                   </div>
                 </td>
@@ -488,6 +496,16 @@ export default function UsersPage() {
           {roleReport()}
         </div>
       )}
+
+      <ConfirmModal
+        open={showConfirmDelete}
+        title="Удалить сотрудника?"
+        description="Вы действительно хотите удалить этого сотрудника? Это действие необратимо."
+        confirmText="Удалить"
+        cancelText="Отмена"
+        onConfirm={confirmDelete}
+        onCancel={() => { setShowConfirmDelete(false); setSelectedDeleteId(null); }}
+      />
     </div>
   );
 } 

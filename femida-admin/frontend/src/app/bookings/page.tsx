@@ -10,6 +10,7 @@ import dynamic from 'next/dynamic';
 import 'react-datepicker/dist/react-datepicker.css';
 import DatePickerClient from '../../components/DatePickerClient';
 import { useSearchParams } from 'next/navigation';
+import ConfirmModal from '../../components/ConfirmModal';
 
 type RoomClass = string | { value: string; label: string };
 
@@ -107,6 +108,9 @@ export default function BookingsPage() {
 
   const [sortState, setSortState] = useState<{ field: string | null; order: 'asc' | 'desc' | null }>({ field: null, order: null });
 
+  const [showConfirmDelete, setShowConfirmDelete] = useState(false);
+  const [selectedDeleteId, setSelectedDeleteId] = useState<number | null>(null);
+
   const handleSort = (field: string) => {
     setSortState(prev => {
       if (prev.field !== field) return { field, order: 'asc' };
@@ -196,16 +200,23 @@ export default function BookingsPage() {
   };
 
   const handleDelete = async (bookingId: number) => {
-    if (!window.confirm('Удалить бронирование?')) return;
+    setSelectedDeleteId(bookingId);
+    setShowConfirmDelete(true);
+  };
+
+  const confirmDelete = async () => {
+    if (!selectedDeleteId) return;
     const token = localStorage.getItem('access');
-    const res = await fetch(`${API_URL}/api/bookings/${bookingId}/`, {
+    const res = await fetch(`${API_URL}/api/bookings/${selectedDeleteId}/`, {
       method: 'DELETE',
       headers: { Authorization: `Bearer ${token}` },
     });
     if (res.ok) {
       setSuccess('Бронирование удалено');
-      setBookings(bookings.filter(b => b.id !== bookingId));
+      setBookings(bookings.filter(b => b.id !== selectedDeleteId));
     }
+    setShowConfirmDelete(false);
+    setSelectedDeleteId(null);
   };
 
   const handleEdit = (bookingId: number) => {
@@ -674,6 +685,15 @@ export default function BookingsPage() {
           </div>
         </div>
       )}
+      <ConfirmModal
+        open={showConfirmDelete}
+        title="Удалить бронирование?"
+        description="Вы действительно хотите удалить это бронирование? Это действие необратимо."
+        confirmText="Удалить"
+        cancelText="Отмена"
+        onConfirm={confirmDelete}
+        onCancel={() => { setShowConfirmDelete(false); setSelectedDeleteId(null); }}
+      />
     </div>
   );
 }
