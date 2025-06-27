@@ -119,6 +119,8 @@ export default function RoomsPage() {
   const searchParams = useSearchParams();
   const [showConfirmDelete, setShowConfirmDelete] = useState(false);
   const [selectedDeleteId, setSelectedDeleteId] = useState<number | null>(null);
+  const [showConfirmDeleteBuilding, setShowConfirmDeleteBuilding] = useState(false);
+  const [selectedDeleteBuildingId, setSelectedDeleteBuildingId] = useState<number | null>(null);
 
   useEffect(() => {
     const token = localStorage.getItem('access');
@@ -332,7 +334,7 @@ export default function RoomsPage() {
           </select>
           <input
             type="text"
-            placeholder={t('search') + ' ' + t('room')}
+            placeholder={t('Поиск по номеру')}
             value={search}
             onChange={e => setSearch(e.target.value)}
             className="input w-48"
@@ -539,6 +541,17 @@ export default function RoomsPage() {
                 <label className="font-semibold">Адрес</label>
                 <input value={newBuildingAddress} onChange={e => setNewBuildingAddress(e.target.value)} className="input w-full" required />
               </div>
+              <div className="mb-4">
+                <label className="font-semibold">Список корпусов</label>
+                <ul className="divide-y divide-gray-200">
+                  {buildings.map(b => (
+                    <li key={b.id} className="flex items-center justify-between py-1">
+                      <span>{b.name}</span>
+                      <button type="button" onClick={() => { setSelectedDeleteBuildingId(b.id); setShowConfirmDeleteBuilding(true); }} className="text-red-600 hover:text-red-800 ml-2" title="Удалить корпус"><FaTrash /></button>
+                    </li>
+                  ))}
+                </ul>
+              </div>
               <div className="flex justify-end gap-2">
                 <button type="button" onClick={() => setShowAddBuildingModal(false)} className="bg-gray-200 hover:bg-gray-300 text-gray-700 px-4 py-2 rounded">Отмена</button>
                 <button type="submit" className="bg-green-700 hover:bg-green-800 text-white px-6 py-2 rounded shadow">Сохранить</button>
@@ -636,6 +649,27 @@ export default function RoomsPage() {
         cancelText="Отмена"
         onConfirm={confirmDelete}
         onCancel={() => { setShowConfirmDelete(false); setSelectedDeleteId(null); }}
+      />
+      <ConfirmModal
+        open={showConfirmDeleteBuilding}
+        title="Удалить корпус?"
+        description="Вы действительно хотите удалить этот корпус? Это действие необратимо."
+        confirmText="Удалить"
+        cancelText="Отмена"
+        onConfirm={async () => {
+          if (!selectedDeleteBuildingId) return;
+          const token = localStorage.getItem('access');
+          await fetch(`${API_URL}/api/buildings/${selectedDeleteBuildingId}/`, {
+            method: 'DELETE',
+            headers: { Authorization: `Bearer ${token}` },
+          });
+          setShowConfirmDeleteBuilding(false);
+          setSelectedDeleteBuildingId(null);
+          // Обновить список корпусов
+          const buildingsRes = await fetch(`${API_URL}/api/buildings/`, { headers: { Authorization: `Bearer ${token}` } });
+          setBuildings(await buildingsRes.json());
+        }}
+        onCancel={() => { setShowConfirmDeleteBuilding(false); setSelectedDeleteBuildingId(null); }}
       />
     </div>
   );
