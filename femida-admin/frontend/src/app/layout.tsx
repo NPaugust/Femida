@@ -3,6 +3,7 @@ import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import ClientLayout from '../components/ClientLayout';
 import I18nProvider from '../components/I18nProvider';
+import { NotificationProvider } from '../components/NotificationSystem';
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -26,7 +27,9 @@ export default function Layout({ children }: { children: React.ReactNode }) {
         className={`${geistSans.variable} ${geistMono.variable} antialiased bg-gray-50`}
       >
         <I18nProvider>
-          <ClientLayout>{children}</ClientLayout>
+          <NotificationProvider>
+            <ClientLayout>{children}</ClientLayout>
+          </NotificationProvider>
         </I18nProvider>
       </body>
     </html>

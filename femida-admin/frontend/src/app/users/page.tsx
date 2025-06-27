@@ -230,7 +230,7 @@ export default function UsersPage() {
     setSelectedDeleteId(userId);
     setShowConfirmDelete(true);
   };
-
+    
   const confirmDelete = async () => {
     if (!selectedDeleteId) return;
     try {
@@ -277,7 +277,7 @@ export default function UsersPage() {
     <div className="p-8">
       <div className="flex items-center justify-between mb-6">
         <h1 className="text-2xl font-bold">Список сотрудников</h1>
-        <div className="flex gap-2 items-center">
+        <div className="flex gap-2 flex-wrap items-center">
           <select
             value={onlineFilter}
             onChange={e => setOnlineFilter(e.target.value)}
@@ -415,40 +415,37 @@ export default function UsersPage() {
         </div>
       )}
 
-      <div className="overflow-x-auto rounded-lg shadow">
-        <table className="min-w-full bg-white rounded-lg">
+      <div className="overflow-x-auto rounded-lg shadow max-w-full">
+        <table className="w-full bg-white rounded-lg">
           <thead>
             <tr className="bg-gray-50 text-gray-700">
-              <th className="p-3 text-left">Пользователь</th>
-              <th className="p-3 text-left">Роль</th>
-              <th className="p-3 text-left">Контакты</th>
-              <th className="p-3 text-left">Статус</th>
-              <th className="p-3 text-left">Действия</th>
+              <th className="p-2 text-left">Пользователь</th>
+              <th className="p-2 text-left">Роль</th>
+              <th className="p-2 text-left">Контакты</th>
+              <th className="p-2 text-left">Статус</th>
+              <th className="p-2 text-left">Действия</th>
             </tr>
           </thead>
           <tbody>
             {paginatedUsers.map(user => (
               <tr key={user.id} className="hover:bg-blue-50 transition-all">
-                <td className="p-3">
-                  <div className="font-semibold">{user.first_name} {user.last_name}</div>
-                  <div className="text-sm text-gray-500">{user.username}</div>
-                </td>
-                <td className="p-3">
+                <td className="p-2 truncate max-w-[120px]" title={`${user.first_name} ${user.last_name}`}>{user.first_name} {user.last_name}</td>
+                <td className="p-2">
                   <span className={`inline-flex items-center px-2 py-1 rounded text-xs font-semibold ${roleColors[user.role] || 'bg-gray-100 text-gray-700'}`}>
                     {roleIcons[user.role]}
                     {roleLabels[user.role] || user.role}
                   </span>
                 </td>
-                <td className="p-3">
+                <td className="p-2">
                   <div className="text-sm">{user.phone}</div>
                 </td>
-                <td className="p-3">
+                <td className="p-2">
                   <span className={`inline-flex items-center gap-1 px-2 py-1 rounded text-xs font-semibold ${user.is_online ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-500'}`}>
                     <span className={`w-2 h-2 rounded-full ${user.is_online ? 'bg-green-500' : 'bg-gray-400'}`}></span>
                     {user.is_online ? 'Онлайн' : 'Офлайн'}
                   </span>
                 </td>
-                <td className="p-3">
+                <td className="p-2">
                   <div className="flex gap-2">
                     <button onClick={() => openEditModal(user)} className="text-yellow-600 hover:text-yellow-800" title="Редактировать">
                       <FaEdit />

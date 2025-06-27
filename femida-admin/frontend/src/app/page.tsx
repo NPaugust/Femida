@@ -1,12 +1,13 @@
 "use client";
 
 import React, { useEffect, useState, useRef } from "react";
-import { FaBed, FaUserFriends, FaCalendarCheck, FaUsers } from "react-icons/fa";
+import { FaBed, FaUserFriends, FaCalendarCheck, FaUsers, FaHistory, FaUserEdit, FaTrash, FaPlus, FaEnvelope, FaSms } from "react-icons/fa";
 import { useRouter } from "next/navigation";
 import { API_URL } from '../shared/api';
 import RoomsPage from './rooms/page';
 import GuestsPage from './guests/page';
 import BookingsPage from './bookings/page';
+import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip as RechartsTooltip, BarChart, Bar, XAxis, YAxis, CartesianGrid, Legend } from 'recharts';
 
 const ROOM_CLASS_LABELS: Record<string, string> = {
   standard: "Стандарт",
@@ -74,6 +75,8 @@ export default function Dashboard() {
   const [showAddGuestModal, setShowAddGuestModal] = useState(false);
   const [showAddBookingModal, setShowAddBookingModal] = useState(false);
   const [showArrivals, setShowArrivals] = useState(false);
+  const [auditLog, setAuditLog] = useState<any[]>([]);
+  const [openAccordion, setOpenAccordion] = useState<'arrivals' | 'bookings' | 'log' | null>(null);
 
   useEffect(() => {
     const token = localStorage.getItem("access");
@@ -98,6 +101,14 @@ export default function Dashboard() {
         setApiError('Ошибка загрузки данных с сервера. Проверьте соединение или попробуйте позже.');
         setLoading(false);
       });
+  }, []);
+
+  useEffect(() => {
+    const token = localStorage.getItem("access");
+    if (!token) return;
+    fetch(`${API_URL}/api/auditlog/?limit=10`, { headers: { Authorization: `Bearer ${token}` } })
+      .then(res => res.json())
+      .then(data => setAuditLog(Array.isArray(data) ? data : data.results || []));
   }, []);
 
   // Гарантируем, что rooms, bookings, guests — массивы
@@ -166,6 +177,13 @@ export default function Dashboard() {
     <div className="bg-white rounded-lg shadow p-4 mb-4 w-full max-w-[100%]">
       <div className="flex items-center mb-2 gap-2">
         <h3 className="text-lg font-semibold">Список номеров</h3>
+        <button
+          onClick={() => setShowAddRoomModal(true)}
+          className="ml-2 flex items-center gap-1 bg-blue-600 hover:bg-blue-700 text-white px-3 py-1 rounded shadow text-sm"
+          title="Добавить номер"
+        >
+          <FaPlus />
+        </button>
         <span className="ml-2 text-xs text-gray-400 flex items-center gap-1">
           <svg width="16" height="16" fill="none" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10" stroke="#a3a3a3" strokeWidth="2"/><text x="12" y="16" textAnchor="middle" fontSize="12" fill="#a3a3a3">i</text></svg>
           Используйте колесико мыши для горизонтального скролла
@@ -217,7 +235,7 @@ export default function Dashboard() {
     <div className="bg-white rounded-lg shadow p-4 mb-4 w-full max-w-[100%]">
       <div
         className="flex items-center justify-between cursor-pointer select-none mb-2"
-        onClick={() => setShowBookings(v => !v)}
+        onClick={() => setOpenAccordion(openAccordion === 'bookings' ? null : 'bookings')}
       >
         <div className="flex items-center gap-2">
           <h3 className="text-lg font-semibold">Последние бронирования</h3>
@@ -226,38 +244,40 @@ export default function Dashboard() {
             Последние бронирования по времени
           </span>
         </div>
-        <span className={`text-xl transition-transform duration-300 ${showBookings ? 'rotate-90' : ''}`}>&#9654;</span>
+        <span className={`text-xl transition-transform duration-300 ${openAccordion === 'bookings' ? 'rotate-90' : ''}`}>&#9654;</span>
       </div>
       <div
-        className={`transition-all duration-300 overflow-hidden ${showBookings ? 'max-h-[600px] opacity-100' : 'max-h-0 opacity-0'}`}
+        className={`transition-all duration-300 overflow-hidden ${openAccordion === 'bookings' ? 'max-h-[600px] opacity-100' : 'max-h-0 opacity-0'}`}
         style={{ willChange: 'max-height, opacity' }}
       >
         {lastBookings.length === 0 ? (
           <div className="text-gray-400 p-3">Нет данных</div>
         ) : (
           <>
-            <table className="min-w-full bg-white rounded-lg">
-              <thead>
-                <tr className="bg-gray-50 text-gray-700">
-                  <th className="p-3 text-left">Комната</th>
-                  <th className="p-3 text-left">Гость</th>
-                  <th className="p-3 text-left">Дата заезда</th>
-                  <th className="p-3 text-left">Дата выезда</th>
-                  <th className="p-3 text-left">Корпус</th>
-                </tr>
-              </thead>
-              <tbody>
-                {paginatedLastBookings.map((b: any) => (
-                  <tr key={b.id} className="hover:bg-blue-50 transition-all">
-                    <td className="p-3">{b.room?.number || '-'}</td>
-                    <td className="p-3">{b.guest?.full_name || '-'}</td>
-                    <td className="p-3">{b.date_from || b.check_in || '-'}</td>
-                    <td className="p-3">{b.date_to || b.check_out || '-'}</td>
-                    <td className="p-3">{b.room?.building?.name || '-'}</td>
+            <div className="overflow-x-auto max-w-full">
+              <table className="min-w-full bg-white rounded-lg">
+                <thead>
+                  <tr className="bg-gray-50 text-gray-700">
+                    <th className="p-3 text-left">Комната</th>
+                    <th className="p-3 text-left">Гость</th>
+                    <th className="p-3 text-left">Дата заезда</th>
+                    <th className="p-3 text-left">Дата выезда</th>
+                    <th className="p-3 text-left">Корпус</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
+                </thead>
+                <tbody>
+                  {paginatedLastBookings.map((b: any) => (
+                    <tr key={b.id} className="hover:bg-blue-50 transition-all">
+                      <td className="p-3">{b.room?.number || '-'}</td>
+                      <td className="p-3">{b.guest?.full_name || '-'}</td>
+                      <td className="p-3">{b.date_from || b.check_in || '-'}</td>
+                      <td className="p-3">{b.date_to || b.check_out || '-'}</td>
+                      <td className="p-3">{b.room?.building?.name || '-'}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
             {/* Пагинация */}
             {totalBookingsPages > 1 && (
               <div className="flex justify-center items-center gap-2 mt-4">
@@ -299,25 +319,25 @@ export default function Dashboard() {
     {
       label: <span className="flex items-center gap-1">Всего номеров <span title="Общее количество всех номеров пансионата" className="text-gray-400 cursor-help">?</span></span>,
       value: roomsArray.length,
-      icon: <FaBed className="text-blue-600 text-xl mb-1" />, 
+      icon: <FaBed className="text-blue-600 text-xl mb-1" />,
       onClick: () => router.push('/rooms'),
     },
     {
       label: <span className="flex items-center gap-1">Активных бронирований <span title="Бронирования, действующие на текущую дату" className="text-gray-400 cursor-help">?</span></span>,
       value: activeBookings.length,
-      icon: <FaCalendarCheck className="text-green-600 text-xl mb-1" />, 
+      icon: <FaCalendarCheck className="text-green-600 text-xl mb-1" />,
       onClick: () => router.push('/bookings'),
     },
     {
       label: <span className="flex items-center gap-1">Гостей <span title="Общее количество гостей в базе" className="text-gray-400 cursor-help">?</span></span>,
       value: guestsArray.length,
-      icon: <FaUsers className="text-purple-600 text-xl mb-1" />, 
+      icon: <FaUsers className="text-purple-600 text-xl mb-1" />,
       onClick: () => router.push('/guests'),
     },
     {
       label: <span className="flex items-center gap-1">Занятых номеров <span title="Количество номеров, занятых хотя бы одним активным бронированием сегодня" className="text-gray-400 cursor-help">?</span></span>,
       value: busyRooms.length,
-      icon: <FaBed className="text-red-600 text-xl mb-1" />, 
+      icon: <FaBed className="text-red-600 text-xl mb-1" />,
       onClick: () => router.push('/rooms'),
       extra: <span className="text-green-600 text-xs font-semibold mt-1">Свободно: {roomsArray.length - busyRooms.length}</span>,
     },
@@ -357,6 +377,49 @@ export default function Dashboard() {
     return `${hh}:${mm} ${d.toLocaleDateString('ru-RU')}`;
   };
 
+  // График загрузки и круговая диаграмма
+  const getOccupancyChartData = (bookings: any[], rooms: any[]) => {
+    const occupancyData = {
+      occupied: 0,
+      free: 0,
+    };
+    rooms.forEach((room: any) => {
+      const status = getRoomStatus(room, bookings);
+      if (status.label === 'Занят') {
+        occupancyData.occupied++;
+      } else if (status.label === 'Свободен') {
+        occupancyData.free++;
+      }
+    });
+    return [
+      { date: 'Сегодня', occupied: occupancyData.occupied, free: occupancyData.free },
+      { date: 'Завтра', occupied: 0, free: 0 },
+    ];
+  };
+
+  const getRoomStatusPieData = (rooms: any[], bookings: any[]) => {
+    const statusData = {
+      free: 0,
+      occupied: 0,
+      repair: 0,
+    };
+    rooms.forEach((room: any) => {
+      const status = getRoomStatus(room, bookings);
+      if (status.label === 'Свободен') {
+        statusData.free++;
+      } else if (status.label === 'Занят') {
+        statusData.occupied++;
+      } else if (status.label === 'Ремонт') {
+        statusData.repair++;
+      }
+    });
+    return [
+      { name: 'Свободен', value: statusData.free },
+      { name: 'Занят', value: statusData.occupied },
+      { name: 'Ремонт', value: statusData.repair },
+    ];
+  };
+
   return (
     <div className="max-w-[1400px] mx-auto">
       {loading ? (
@@ -379,54 +442,37 @@ export default function Dashboard() {
               </div>
             ))}
           </div>
-          {/* Быстрые действия */}
-          <div className="flex flex-wrap gap-3 mb-4">
-            <button
-              onClick={() => router.push('/rooms')}
-              className="flex items-center gap-2 px-4 py-2 rounded-lg font-semibold text-base shadow border border-blue-200 bg-blue-100 text-black hover:bg-blue-200 hover:shadow-md hover:-translate-y-0.5 transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-blue-300"
-            >
-              <FaBed className="text-lg" /> Все номера
-            </button>
-            <button
-              onClick={() => router.push('/guests')}
-              className="flex items-center gap-2 px-4 py-2 rounded-lg font-semibold text-base shadow border border-purple-200 bg-purple-100 text-black hover:bg-purple-200 hover:shadow-md hover:-translate-y-0.5 transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-purple-300"
-            >
-              <FaUsers className="text-lg" /> Все гости
-            </button>
-            <button
-              onClick={() => router.push('/bookings')}
-              className="flex items-center gap-2 px-4 py-2 rounded-lg font-semibold text-base shadow border border-green-200 bg-green-100 text-black hover:bg-green-200 hover:shadow-md hover:-translate-y-0.5 transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-green-300"
-            >
-              <FaCalendarCheck className="text-lg" /> Все бронирования
-            </button>
-            <button
-              onClick={() => router.push('/rooms?add=1')}
-              className="flex items-center gap-2 px-4 py-2 rounded-lg font-semibold text-base shadow border border-blue-200 bg-blue-50 text-black hover:bg-blue-100 hover:shadow-md hover:-translate-y-0.5 transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-blue-200"
-            >
-              <FaBed className="text-lg" /> Добавить номер
-            </button>
-            <button
-              onClick={() => router.push('/guests?add=1')}
-              className="flex items-center gap-2 px-4 py-2 rounded-lg font-semibold text-base shadow border border-purple-200 bg-purple-50 text-black hover:bg-purple-100 hover:shadow-md hover:-translate-y-0.5 transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-purple-200"
-            >
-              <FaUsers className="text-lg" /> Добавить гостя
-            </button>
-            <button
-              onClick={() => router.push('/bookings?add=1')}
-              className="flex items-center gap-2 px-4 py-2 rounded-lg font-semibold text-base shadow border border-green-200 bg-green-50 text-black hover:bg-green-100 hover:shadow-md hover:-translate-y-0.5 transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-green-200"
-            >
-              <FaCalendarCheck className="text-lg" /> Добавить бронирование
-            </button>
-          </div>
-          {/* Список номеров */}
-          {renderRoomCards()}
           {/* Новый блок статистики и ближайших заездов/выездов (аккордеон) */}
           <div className="bg-white rounded-lg shadow p-4 mb-4">
-            <div className="flex items-center justify-between cursor-pointer select-none mb-2" onClick={() => setShowArrivals(v => !v)}>
+            <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 mb-2">
+              <h3 className="text-lg font-semibold">Ближайшие заезды и выезды / Статистика</h3>
+            </div>
+            <div className="flex gap-4">
+              <div
+                className="flex-1 flex flex-col items-center justify-center cursor-pointer hover:bg-blue-50 rounded-lg p-3 transition-all"
+                onClick={() => router.push(`/bookings?date_from=${todayStr}`)}
+                title="Показать все заезды на сегодня"
+              >
+                <span className="text-xs text-gray-500">Заездов сегодня</span>
+                <span className="text-2xl font-bold text-blue-600">{todayArrivals.length}</span>
+              </div>
+              <div
+                className="flex-1 flex flex-col items-center justify-center cursor-pointer hover:bg-blue-50 rounded-lg p-3 transition-all"
+                onClick={() => router.push(`/guests?arrivals=${todayStr}`)}
+                title="Показать гостей, заезжающих сегодня"
+              >
+                <span className="text-xs text-gray-500">Гости</span>
+                <span className="text-2xl font-bold text-purple-600">{todayGuests}</span>
+              </div>
+            </div>
+          </div>
+          {/* Новый блок статистики и ближайших заездов/выездов (аккордеон) */}
+          <div className="bg-white rounded-lg shadow p-4 mb-4">
+            <div className="flex items-center justify-between cursor-pointer select-none mb-2" onClick={() => setOpenAccordion(openAccordion === 'arrivals' ? null : 'arrivals')}>
               <div className="flex items-center gap-2">
                 <h3 className="text-lg font-semibold">Ближайшие заезды и выезды / Статистика</h3>
               </div>
-              <span className={`text-xl transition-transform duration-300 ${showArrivals ? 'rotate-90' : ''}`}>&#9654;</span>
+              <span className={`text-xl transition-transform duration-300 ${openAccordion === 'arrivals' ? 'rotate-90' : ''}`}>&#9654;</span>
             </div>
             <div className="flex flex-wrap gap-6 mb-4">
               <div className="flex flex-col items-center">
@@ -436,58 +482,94 @@ export default function Dashboard() {
               <div className="flex flex-col items-center">
                 <span className="text-xs text-gray-500">Выездов сегодня</span>
                 <span className="text-xl font-bold text-green-600">{todayDepartures.length}</span>
-              </div>
+                  </div>
               <div className="flex flex-col items-center">
-                <span className="text-xs text-gray-500">Гостей сегодня</span>
+                <span className="text-xs text-gray-500">Гости</span>
                 <span className="text-xl font-bold text-purple-600">{todayGuests}</span>
               </div>
-            </div>
-            <div className={`transition-all duration-300 overflow-hidden ${showArrivals ? 'max-h-[600px] opacity-100' : 'max-h-0 opacity-0'}`} style={{ willChange: 'max-height, opacity' }}>
+          </div>
+            <div className={`transition-all duration-300 overflow-hidden ${openAccordion === 'arrivals' ? 'max-h-[600px] opacity-100' : 'max-h-0 opacity-0'}`} style={{ willChange: 'max-height, opacity' }}>
               <h4 className="font-semibold mb-2 text-sm text-gray-700">Ближайшие заезды/выезды (сегодня и завтра)</h4>
               {upcoming.length === 0 ? (
                 <div className="text-gray-400 p-3">Нет заездов или выездов на ближайшие дни</div>
-              ) : (
+            ) : (
+              <div className="overflow-x-auto max-w-full">
                 <table className="min-w-full bg-white rounded-lg">
                   <thead>
-                    <tr className="bg-gray-50 text-gray-700 text-xs">
-                      <th className="p-2 text-left">Гость</th>
-                      <th className="p-2 text-left">Номер</th>
-                      <th className="p-2 text-left">Корпус</th>
-                      <th className="p-2 text-left">Дата</th>
-                      <th className="p-2 text-left">Статус</th>
+                      <tr className="bg-gray-50 text-gray-700 text-xs">
+                        <th className="p-2 text-left">Гость</th>
+                        <th className="p-2 text-left">Номер</th>
+                        <th className="p-2 text-left">Корпус</th>
+                        <th className="p-2 text-left">Дата</th>
+                        <th className="p-2 text-left">Статус</th>
                     </tr>
                   </thead>
                   <tbody>
-                    {upcoming.map((b: any) => {
-                      const inDate = (b.check_in || b.date_from);
-                      const outDate = (b.check_out || b.date_to);
-                      const inDateShort = inDate?.slice(0, 10);
-                      const outDateShort = outDate?.slice(0, 10);
-                      const isArrival = inDateShort === todayStr || inDateShort === tomorrowStr;
-                      const isDeparture = outDateShort === todayStr || outDateShort === tomorrowStr;
-                      return (
-                        <tr key={b.id} className="hover:bg-blue-50 transition-all">
-                          <td className="p-2">{b.guest?.full_name || '-'}</td>
-                          <td className="p-2">{b.room?.number || '-'}</td>
-                          <td className="p-2">{b.room?.building?.name || '-'}</td>
-                          <td className="p-2">{isArrival ? formatDateTime(inDate) : formatDateTime(outDate)}</td>
-                          <td className="p-2">
-                            {isArrival && <span className="inline-block px-2 py-1 rounded bg-blue-100 text-blue-700 text-xs font-semibold mr-1">Заезд</span>}
-                            {isDeparture && <span className="inline-block px-2 py-1 rounded bg-green-100 text-green-700 text-xs font-semibold">Выезд</span>}
-                          </td>
-                        </tr>
-                      );
-                    })}
+                      {upcoming.map((b: any) => {
+                        const inDate = (b.check_in || b.date_from);
+                        const outDate = (b.check_out || b.date_to);
+                        const inDateShort = inDate?.slice(0, 10);
+                        const outDateShort = outDate?.slice(0, 10);
+                        const isArrival = inDateShort === todayStr || inDateShort === tomorrowStr;
+                        const isDeparture = outDateShort === todayStr || outDateShort === tomorrowStr;
+                        return (
+                      <tr key={b.id} className="hover:bg-blue-50 transition-all">
+                            <td className="p-2">{b.guest?.full_name || '-'}</td>
+                            <td className="p-2">{b.room?.number || '-'}</td>
+                            <td className="p-2">{b.room?.building?.name || '-'}</td>
+                            <td className="p-2">{isArrival ? formatDateTime(inDate) : formatDateTime(outDate)}</td>
+                            <td className="p-2">
+                              {isArrival && <span className="inline-block px-2 py-1 rounded bg-blue-100 text-blue-700 text-xs font-semibold mr-1">Заезд</span>}
+                              {isDeparture && <span className="inline-block px-2 py-1 rounded bg-green-100 text-green-700 text-xs font-semibold">Выезд</span>}
+                            </td>
+                      </tr>
+                        );
+                      })}
                   </tbody>
                 </table>
-              )}
-            </div>
+              </div>
+            )}
+          </div>
           </div>
           {/* Последние бронирования (аккордеон) */}
           {renderBookingsAccordion()}
           {showAddRoomModal && <AddRoomModal onClose={() => setShowAddRoomModal(false)} />}
           {showAddGuestModal && <AddGuestModal onClose={() => setShowAddGuestModal(false)} />}
           {showAddBookingModal && <AddBookingModal onClose={() => setShowAddBookingModal(false)} />}
+          {/* Лог последних действий (accordion) */}
+          <div className="bg-white rounded-xl shadow-lg p-4 mb-8">
+            <div className="flex items-center justify-between cursor-pointer select-none mb-2" onClick={() => setOpenAccordion(openAccordion === 'log' ? null : 'log')}>
+              <h3 className="text-lg font-semibold">Лог последних действий</h3>
+              <span className={`text-xl transition-transform duration-300 ${openAccordion === 'log' ? 'rotate-90' : ''}`}>&#9654;</span>
+            </div>
+            <div className={`transition-all duration-300 overflow-hidden ${openAccordion === 'log' ? 'max-h-[600px] opacity-100' : 'max-h-0 opacity-0'}`} style={{ willChange: 'max-height, opacity' }}>
+              {auditLog.length === 0 ? (
+                <div className="text-gray-400">Нет данных</div>
+              ) : (
+                <div className="overflow-x-auto max-w-full">
+                  <ul className="divide-y divide-gray-100">
+                    {auditLog.slice(0, 10).map((log, idx) => (
+                      <li key={log.id || idx} className="py-2 flex items-center gap-3">
+                        <span className="text-gray-400 text-xs w-24">{new Date(log.timestamp).toLocaleString()}</span>
+                        <span className="text-blue-600 text-lg">
+                          {log.action === 'Создание' && <FaPlus />}
+                          {log.action === 'Изменение' && <FaUserEdit />}
+                          {log.action === 'Удаление' && <FaTrash />}
+                          {log.action === 'Отправка сообщения' && (log.details?.includes('SMS') ? <FaSms /> : <FaEnvelope />)}
+                          {log.object_type === 'Booking' && <FaCalendarCheck />}
+                          {log.object_type === 'Room' && <FaBed />}
+                        </span>
+                        <span className="font-semibold text-gray-700">{log.action}</span>
+                        <span className="text-gray-500 text-xs">{log.object_type} #{log.object_id}</span>
+                        <span className="text-gray-400 text-xs truncate max-w-xs">{log.details}</span>
+                        <span className="text-xs text-gray-500 ml-auto">{log.user || '-'}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+            </div>
+          </div>
         </>
       )}
     </div>

@@ -130,7 +130,6 @@ export default function ReportsPage() {
             className="input" 
             placeholder="Фильтр по дате"
           />
-          <div className="text-xs text-gray-400 mt-1">Введите точную дату заезда/выезда</div>
           {filterDate && (
             <button 
               onClick={() => setFilterDate('')} 

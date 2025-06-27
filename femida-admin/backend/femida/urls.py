@@ -17,7 +17,7 @@ Including another URLconf
 from django.contrib import admin
 from django.urls import path, include
 from rest_framework import routers
-from booking.views import UserViewSet, RoomViewSet, GuestViewSet, BookingViewSet, BuildingViewSet
+from booking.views import UserViewSet, RoomViewSet, GuestViewSet, BookingViewSet, BuildingViewSet, AuditLogViewSet
 from rest_framework_simplejwt.views import TokenObtainPairView, TokenRefreshView
 from drf_yasg.views import get_schema_view
 from drf_yasg import openapi
@@ -41,6 +41,7 @@ router.register(r'rooms', RoomViewSet)
 router.register(r'guests', GuestViewSet)
 router.register(r'bookings', BookingViewSet)
 router.register(r'buildings', BuildingViewSet)
+router.register(r'auditlog', AuditLogViewSet)
 
 urlpatterns = [
     path('admin/', admin.site.urls),
