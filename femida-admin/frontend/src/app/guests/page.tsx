@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 // @ts-ignore
 import { saveAs } from 'file-saver';
-import { FaUser, FaEdit, FaTrash, FaFileCsv, FaPlus, FaEnvelope, FaMapMarkerAlt, FaCalendarAlt, FaMoneyBillWave, FaChartBar, FaCheckCircle, FaTimesCircle, FaComment } from 'react-icons/fa';
+import { FaUser, FaEdit, FaTrash, FaFileCsv, FaPlus, FaMapMarkerAlt, FaCalendarAlt, FaMoneyBillWave, FaChartBar, FaCheckCircle, FaTimesCircle, FaComment } from 'react-icons/fa';
 import dynamic from 'next/dynamic';
 import 'react-phone-input-2/lib/style.css';
 import { API_URL } from '../../shared/api';
@@ -17,8 +17,6 @@ type Guest = {
   full_name: string;
   inn: string;
   phone: string;
-  email: string;
-  address: string;
   notes: string;
   registration_date: string;
   total_spent: number;
@@ -264,9 +262,7 @@ export default function GuestsPage() {
     const searchMatch = !search || 
       (searchField === 'full_name' && g.full_name.toLowerCase().includes(search.toLowerCase())) ||
       (searchField === 'phone' && g.phone.includes(search)) ||
-      (searchField === 'email' && g.email && g.email.toLowerCase().includes(search.toLowerCase())) ||
-      (searchField === 'inn' && g.inn.includes(search)) ||
-      (searchField === 'address' && g.address && g.address.toLowerCase().includes(search.toLowerCase()));
+      (searchField === 'inn' && g.inn.includes(search));
     
     const statusMatch = !filterStatus || g.status === filterStatus;
     const visitsFromMatch = !filterVisitsFrom || (g.visits_count || 0) >= Number(filterVisitsFrom);
@@ -307,10 +303,10 @@ export default function GuestsPage() {
   );
 
   const exportToCSV = () => {
-    const header = 'ФИО,ИНН,Телефон,Email,Адрес,Статус,Посещений,Потрачено (сом),Дата регистрации,Примечания';
+    const header = 'ФИО,ИНН,Телефон,Статус,Посещений,Потрачено (сом),Дата регистрации,Примечания';
     const rows = filteredGuests.map(g => {
       const status = GUEST_STATUSES.find(s => s.value === g.status)?.label || g.status;
-      return `${g.full_name},${g.inn},${g.phone},${g.email || ''},${g.address || ''},${status},${g.visits_count || 0},${g.total_spent || 0},${g.registration_date || ''},"${g.notes || ''}"`;
+      return `${g.full_name},${g.inn},${g.phone},${status},${g.visits_count || 0},${g.total_spent || 0},${g.registration_date || ''},"${g.notes || ''}"`;
     });
     const csv = [header, ...rows].join('\n');
     const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
@@ -407,10 +403,10 @@ export default function GuestsPage() {
   };
 
   const handleMassExport = () => {
-    const header = 'ФИО,ИНН,Телефон,Email,Адрес,Статус,Посещений,Потрачено (сом),Дата регистрации,Примечания';
+    const header = 'ФИО,ИНН,Телефон,Статус,Посещений,Потрачено (сом),Дата регистрации,Примечания';
     const rows = guestsArray.filter(g => selectedGuestIds.includes(g.id)).map(g => {
       const status = GUEST_STATUSES.find(s => s.value === g.status)?.label || g.status;
-      return `${g.full_name},${g.inn},${g.phone},${g.email || ''},${g.address || ''},${status},${g.visits_count || 0},${g.total_spent || 0},${g.registration_date || ''},"${g.notes || ''}"`;
+      return `${g.full_name},${g.inn},${g.phone},${status},${g.visits_count || 0},${g.total_spent || 0},${g.registration_date || ''},"${g.notes || ''}"`;
     });
     const csv = [header, ...rows].join('\n');
     const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
@@ -471,8 +467,6 @@ export default function GuestsPage() {
         return value && !/^[0-9]{14}$/.test(value) ? 'ИНН должен содержать ровно 14 цифр' : '';
       case 'phone':
         return value && !/^\+\d{7,16}$/.test(value.replace(/\s/g, '')) ? 'Введите корректный номер телефона' : '';
-      case 'email':
-        return value && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value) ? 'Введите корректный email' : '';
       default:
         return '';
     }
@@ -509,7 +503,6 @@ export default function GuestsPage() {
                   <th>ФИО</th>
                   <th>ИНН</th>
                   <th>Телефон</th>
-                  <th>Email</th>
                   <th>Статус</th>
                   <th>Посещений</th>
                   <th>Потрачено</th>
@@ -521,7 +514,6 @@ export default function GuestsPage() {
                     <td>${guest.full_name}</td>
                     <td>${guest.inn}</td>
                     <td>${guest.phone}</td>
-                    <td>${guest.email || '-'}</td>
                     <td>${GUEST_STATUSES.find(s => s.value === guest.status)?.label || guest.status}</td>
                     <td>${guest.visits_count || 0}</td>
                     <td>${guest.total_spent ? `${guest.total_spent.toLocaleString()} сом` : '0 сом'}</td>
@@ -539,10 +531,10 @@ export default function GuestsPage() {
   };
 
   const exportToExcel = () => {
-    const header = 'ФИО,ИНН,Телефон,Email,Адрес,Статус,Посещений,Потрачено (сом),Дата регистрации,Примечания';
+    const header = 'ФИО,ИНН,Телефон,Статус,Посещений,Потрачено (сом),Дата регистрации,Примечания';
     const rows = filteredGuests.map(g => {
       const status = GUEST_STATUSES.find(s => s.value === g.status)?.label || g.status;
-      return `"${g.full_name}","${g.inn}","${g.phone}","${g.email || ''}","${g.address || ''}","${status}",${g.visits_count || 0},${g.total_spent || 0},"${g.registration_date || ''}","${g.notes || ''}"`;
+      return `"${g.full_name}","${g.inn}","${g.phone}","${status}",${g.visits_count || 0},${g.total_spent || 0},"${g.registration_date || ''}","${g.notes || ''}"`;
     });
     const csv = [header, ...rows].join('\n');
     const blob = new Blob(['\ufeff' + csv], { type: 'text/csv;charset=utf-8;' });
@@ -596,13 +588,11 @@ export default function GuestsPage() {
           <select value={searchField} onChange={e => setSearchField(e.target.value)} className="input w-32">
             <option value="full_name">ФИО</option>
             <option value="phone">Телефон</option>
-            <option value="email">Email</option>
             <option value="inn">ИНН</option>
-            <option value="address">Адрес</option>
           </select>
           <input
             type="text"
-            placeholder={`Поиск по ${searchField === 'full_name' ? 'ФИО' : searchField === 'phone' ? 'телефону' : searchField === 'email' ? 'email' : searchField === 'inn' ? 'ИНН' : 'адресу'}`}
+            placeholder={`Поиск по ${searchField === 'full_name' ? 'ФИО' : searchField === 'phone' ? 'телефону' : 'ИНН'}`}
             value={search}
             onChange={e => setSearch(e.target.value)}
             className="input w-48"
@@ -679,20 +669,6 @@ export default function GuestsPage() {
                 <span className="font-semibold">Активных</span>
               </div>
               <div className="text-2xl font-bold text-green-600">{stats.active} ({stats.activePercentage}%)</div>
-            </div>
-            <div className="bg-white rounded-lg shadow p-4">
-              <div className="flex items-center gap-2">
-                <FaMoneyBillWave className="text-yellow-600" />
-                <span className="font-semibold">Общая сумма</span>
-              </div>
-              <div className="text-2xl font-bold text-yellow-600">{stats.totalSpent.toLocaleString()} сом</div>
-            </div>
-            <div className="bg-white rounded-lg shadow p-4">
-              <div className="flex items-center gap-2">
-                <FaChartBar className="text-purple-600" />
-                <span className="font-semibold">Среднее</span>
-              </div>
-              <div className="text-2xl font-bold text-purple-600">{stats.averageSpent} сом / {stats.averageVisits} посещ.</div>
             </div>
           </div>
         );
@@ -782,7 +758,6 @@ export default function GuestsPage() {
                   <th className="p-2 text-left" onClick={() => handleSort('full_name')}>ФИО {sortState.field === 'full_name' && (sortState.order === 'asc' ? '▲' : sortState.order === 'desc' ? '▼' : '')}</th>
                   <th className="p-2 text-left" onClick={() => handleSort('inn')}>ИНН {sortState.field === 'inn' && (sortState.order === 'asc' ? '▲' : sortState.order === 'desc' ? '▼' : '')}</th>
                   <th className="p-2 text-left" onClick={() => handleSort('phone')}>Телефон {sortState.field === 'phone' && (sortState.order === 'asc' ? '▲' : sortState.order === 'desc' ? '▼' : '')}</th>
-                  <th className="p-2 text-left" onClick={() => handleSort('email')}>Email {sortState.field === 'email' && (sortState.order === 'asc' ? '▲' : sortState.order === 'desc' ? '▼' : '')}</th>
                   <th className="p-2 text-left" onClick={() => handleSort('status')}>Статус {sortState.field === 'status' && (sortState.order === 'asc' ? '▲' : sortState.order === 'desc' ? '▼' : '')}</th>
                   <th className="p-2 text-left" onClick={() => handleSort('visits_count')}>Посещения {sortState.field === 'visits_count' && (sortState.order === 'asc' ? '▲' : sortState.order === 'desc' ? '▼' : '')}</th>
                   <th className="p-2 text-left" onClick={() => handleSort('total_spent')}>Потрачено {sortState.field === 'total_spent' && (sortState.order === 'asc' ? '▲' : sortState.order === 'desc' ? '▼' : '')}</th>
@@ -804,7 +779,6 @@ export default function GuestsPage() {
                     <td className="p-2 truncate max-w-[120px]" title={guest.full_name}>{guest.full_name}</td>
                     <td className="p-2">{guest.inn}</td>
                     <td className="p-2">{guest.phone}</td>
-                    <td className="p-2">{guest.email || '-'}</td>
                     <td className="p-2">
                       {(() => {
                         const status = GUEST_STATUSES.find(s => s.value === guest.status);
@@ -932,14 +906,6 @@ export default function GuestsPage() {
               <div className="flex flex-col gap-2">
                 <span className="text-gray-500 text-xs">Телефон:</span>
                 <span className="font-semibold">{selectedGuest.phone}</span>
-              </div>
-              <div className="flex flex-col gap-2">
-                <span className="text-gray-500 text-xs">Email:</span>
-                <span>{selectedGuest.email || '-'}</span>
-              </div>
-              <div className="flex flex-col gap-2">
-                <span className="text-gray-500 text-xs">Адрес:</span>
-                <span>{selectedGuest.address || '-'}</span>
               </div>
               <div className="flex flex-col gap-2">
                 <span className="text-gray-500 text-xs">ИНН:</span>

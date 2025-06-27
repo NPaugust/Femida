@@ -79,12 +79,11 @@ function getFieldValue(obj: any, path: string) {
   return path.split('.').reduce((acc, part) => acc && acc[part], obj);
 }
 
-// Добавить утилиту для форматирования даты:
-function toYMD(dateStr: string) {
+function toYMD(dateStr: string): string {
   if (!dateStr) return '';
   const d = new Date(dateStr);
-  if (isNaN(d.getTime())) return '';
-  return d.toISOString().slice(0, 10);
+  if (isNaN(d.getTime())) return dateStr;
+  return d.toISOString().split('T')[0];
 }
 
 export default function BookingsPage() {
@@ -234,7 +233,7 @@ export default function BookingsPage() {
           check_out: toYMD(addForm.date_to),
           people_count: peopleCount,
           payment_status: addForm.payment_status,
-          payment_amount: addForm.payment_amount ? Number(addForm.payment_amount) : 0,
+          payment_amount: addForm.payment_amount ? parseFloat(addForm.payment_amount) : 0,
           payment_method: addForm.payment_method,
           comments: addForm.comments,
         }),
@@ -331,11 +330,11 @@ export default function BookingsPage() {
         body: JSON.stringify({
           room_id: Number(editForm.room),
           guest_id: Number(editForm.guest),
-          check_in: toYMD(editForm.date_from),
-          check_out: toYMD(editForm.date_to),
+          date_from: editForm.date_from,
+          date_to: editForm.date_to,
           people_count: editPeopleCount,
           payment_status: editForm.payment_status,
-          payment_amount: editForm.payment_amount ? Number(editForm.payment_amount) : 0,
+          payment_amount: editForm.payment_amount ? parseFloat(editForm.payment_amount) : 0,
           payment_method: editForm.payment_method,
           comments: editForm.comments,
         }),
@@ -413,7 +412,7 @@ export default function BookingsPage() {
     const rows = filteredBookings.map(b => {
       const paymentStatus = PAYMENT_STATUSES.find(s => s.value === b.payment_status)?.label || b.payment_status;
       const paymentMethod = PAYMENT_METHODS.find(m => m.value === b.payment_method)?.label || b.payment_method;
-      return `№${b.room.number} — ${b.room.room_class},${b.guest.full_name},${b.date_from},${b.date_to},${b.people_count},${paymentStatus},${b.payment_amount || 0},${paymentMethod},${b.total_amount || 0},"${b.comments || ''}"`;
+      return `№${b.room.number} — ${b.room.room_class},${b.guest.full_name},${b.date_from},${b.date_to},${b.people_count},${paymentStatus},${b.payment_amount ? `${Number(b.payment_amount).toLocaleString('ru-RU', {minimumFractionDigits: 2, maximumFractionDigits: 2})} сом` : '-'},${paymentMethod},${b.total_amount || 0},"${b.comments || ''}"`;
     });
     const csv = [header, ...rows].join('\n');
     const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
@@ -470,8 +469,8 @@ export default function BookingsPage() {
     const paid = filteredBookings.filter(b => b.payment_status === 'paid').length;
     const pending = filteredBookings.filter(b => b.payment_status === 'pending').length;
     const partial = filteredBookings.filter(b => b.payment_status === 'partial').length;
-    const totalAmount = filteredBookings.reduce((sum, b) => sum + (b.total_amount || 0), 0);
-    const paidAmount = filteredBookings.filter(b => b.payment_status === 'paid').reduce((sum, b) => sum + (b.payment_amount || 0), 0);
+    const totalAmount = filteredBookings.reduce((sum, b) => sum + Number(b.total_amount || 0), 0);
+    const paidAmount = filteredBookings.filter(b => b.payment_status === 'paid').reduce((sum, b) => sum + Number(b.payment_amount || 0), 0);
     
     return {
       total,
@@ -600,14 +599,14 @@ export default function BookingsPage() {
                 <FaMoneyBillWave className="text-yellow-600" />
                 <span className="font-semibold">Общая сумма</span>
               </div>
-              <div className="text-2xl font-bold text-yellow-600">{stats.totalAmount.toLocaleString()} сом</div>
+              <div className="text-2xl font-bold text-yellow-600">{Number(stats.totalAmount || 0).toLocaleString('ru-RU', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} сом</div>
             </div>
             <div className="bg-white rounded-lg shadow p-4">
               <div className="flex items-center gap-2">
                 <FaCreditCard className="text-purple-600" />
                 <span className="font-semibold">Оплачено</span>
               </div>
-              <div className="text-2xl font-bold text-purple-600">{stats.paidAmount.toLocaleString()} сом ({stats.amountPercentage}%)</div>
+              <div className="text-2xl font-bold text-purple-600">{Number(stats.paidAmount || 0).toLocaleString('ru-RU', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} сом ({stats.amountPercentage}%)</div>
             </div>
           </div>
         );
@@ -700,7 +699,7 @@ export default function BookingsPage() {
                     onChange={handleAddChange}
                     className="input w-full h-11"
                     min="0"
-                    step="100"
+                    step="0.01"
                   />
                 </div>
                 <div className="flex flex-col gap-1">
@@ -739,59 +738,28 @@ export default function BookingsPage() {
         </div>
       )}
       <div className="overflow-x-auto rounded-lg shadow max-w-full">
-        <table className="w-full bg-white rounded-lg shadow">
+        <table className="w-full bg-white rounded-lg text-sm">
           <thead>
             <tr className="bg-gray-50 text-gray-700">
-              <th className="p-2 text-left" onClick={() => handleSort('room.number')}>Комната {sortState.field === 'room.number' && (sortState.order === 'asc' ? '▲' : sortState.order === 'desc' ? '▼' : '')}</th>
-              <th className="p-2 text-left" onClick={() => handleSort('room.building')}>Корпус {sortState.field === 'room.building' && (sortState.order === 'asc' ? '▲' : sortState.order === 'desc' ? '▼' : '')}</th>
-              <th className="p-2 text-left" onClick={() => handleSort('room.room_class')}>Класс {sortState.field === 'room.room_class' && (sortState.order === 'asc' ? '▲' : sortState.order === 'desc' ? '▼' : '')}</th>
-              <th className="p-2 text-left" onClick={() => handleSort('room.capacity')}>Вместимость {sortState.field === 'room.capacity' && (sortState.order === 'asc' ? '▲' : sortState.order === 'desc' ? '▼' : '')}</th>
-              <th className="p-2 text-left" onClick={() => handleSort('room.status')}>Статус {sortState.field === 'room.status' && (sortState.order === 'asc' ? '▲' : sortState.order === 'desc' ? '▼' : '')}</th>
-              <th className="p-2 text-left" onClick={() => handleSort('guest.full_name')}>Гость {sortState.field === 'guest.full_name' && (sortState.order === 'asc' ? '▲' : sortState.order === 'desc' ? '▼' : '')}</th>
-              <th className="p-2 text-left" onClick={() => handleSort('guest.phone')}>Телефон {sortState.field === 'guest.phone' && (sortState.order === 'asc' ? '▲' : sortState.order === 'desc' ? '▼' : '')}</th>
-              <th className="p-2 text-left" onClick={() => handleSort('date_from')}>Дата заезда {sortState.field === 'date_from' && (sortState.order === 'asc' ? '▲' : sortState.order === 'desc' ? '▼' : '')}</th>
-              <th className="p-2 text-left" onClick={() => handleSort('date_to')}>Дата выезда {sortState.field === 'date_to' && (sortState.order === 'asc' ? '▲' : sortState.order === 'desc' ? '▼' : '')}</th>
-              <th className="p-2 text-left" onClick={() => handleSort('people_count')}>Кол-во гостей {sortState.field === 'people_count' && (sortState.order === 'asc' ? '▲' : sortState.order === 'desc' ? '▼' : '')}</th>
-              <th className="p-2 text-left" onClick={() => handleSort('payment_status')}>Статус оплаты {sortState.field === 'payment_status' && (sortState.order === 'asc' ? '▲' : sortState.order === 'desc' ? '▼' : '')}</th>
-              <th className="p-2 text-left" onClick={() => handleSort('payment_amount')}>Сумма оплаты {sortState.field === 'payment_amount' && (sortState.order === 'asc' ? '▲' : sortState.order === 'desc' ? '▼' : '')}</th>
-              <th className="p-2 text-left" onClick={() => handleSort('total_amount')}>Общая сумма {sortState.field === 'total_amount' && (sortState.order === 'asc' ? '▲' : sortState.order === 'desc' ? '▼' : '')}</th>
-              <th className="p-2 text-left" onClick={() => handleSort('payment_method')}>Способ оплаты {sortState.field === 'payment_method' && (sortState.order === 'asc' ? '▲' : sortState.order === 'desc' ? '▼' : '')}</th>
-              <th className="p-2 text-left">Действия</th>
+              <th className="p-1">Комн.</th>
+              <th className="p-1">Гость</th>
+              <th className="p-1">Тел.</th>
+              <th className="p-1">Заезд</th>
+              <th className="p-1">Выезд</th>
+              <th className="p-1">Оплата</th>
+              <th className="p-1">Действия</th>
             </tr>
           </thead>
           <tbody>
             {sortedBookings.map(b => {
-              const room = rooms.find(r => r.id === b.room.id);
-              let buildingName = '-';
-              if (room?.building) {
-                const buildingVal: any = room.building;
-                if (typeof buildingVal === 'object' && buildingVal.name) buildingName = buildingVal.name;
-                else if (typeof buildingVal === 'number') {
-                  const bld = buildings.find((b: any) => b.id === buildingVal);
-                  if (bld && bld.name) buildingName = bld.name;
-                } else if (typeof buildingVal === 'string') {
-                  buildingName = buildingVal;
-                }
-              }
-              const now = new Date().toISOString().slice(0, 10);
-              const isActive = b.date_from <= now && b.date_to >= now;
               return (
                 <tr key={b.id} className="hover:bg-blue-50 transition-all">
-                  <td className="p-2">№{b.room.number}</td>
-                  <td className="p-2">{buildingName}</td>
-                  <td className="p-2">{typeof b.room.room_class === 'object' && b.room.room_class !== null ? b.room.room_class.label : ROOM_CLASS_LABELS[b.room.room_class as string] || b.room.room_class || '-'}</td>
-                  <td className="p-2">{b.room.capacity || '-'}</td>
-                  <td className="p-2">
-                    <span className={`inline-block px-2 py-1 rounded-full text-xs font-semibold ${room?.status === 'busy' ? 'bg-red-200 text-red-800' : room?.status === 'repair' ? 'bg-yellow-200 text-yellow-800' : 'bg-green-200 text-green-800'}`}>
-                      {room?.status === 'busy' ? 'Занят' : room?.status === 'repair' ? 'Ремонт' : 'Свободен'}
-                    </span>
-                  </td>
-                  <td className="p-2 truncate max-w-[120px]" title={b.guest.full_name}>{b.guest.full_name}</td>
-                  <td className="p-2 text-sm">{b.guest.phone || '-'}</td>
-                  <td className="p-2">{formatDate(b.date_from || b.check_in)}</td>
-                  <td className="p-2">{formatDate(b.date_to || b.check_out)}</td>
-                  <td className="p-2">{b.people_count || '-'}</td>
-                  <td className="p-2">
+                  <td className="p-1">№{b.room.number}</td>
+                  <td className="p-1 truncate max-w-[90px]" title={b.guest.full_name}>{b.guest.full_name}</td>
+                  <td className="p-1">{b.guest.phone || '-'}</td>
+                  <td className="p-1">{formatDate(b.date_from || b.check_in)}</td>
+                  <td className="p-1">{formatDate(b.date_to || b.check_out)}</td>
+                  <td className="p-1">
                     <select
                       value={b.payment_status || 'pending'}
                       onChange={(e) => handlePaymentStatusChange(b.id, e.target.value)}
@@ -802,10 +770,7 @@ export default function BookingsPage() {
                       ))}
                     </select>
                   </td>
-                  <td className="p-2">{b.payment_amount ? `${b.payment_amount.toLocaleString()} сом` : '-'}</td>
-                  <td className="p-2">{b.total_amount ? `${b.total_amount.toLocaleString()} сом` : '-'}</td>
-                  <td className="p-2">{PAYMENT_METHODS.find(m => m.value === b.payment_method)?.label || b.payment_method || '-'}</td>
-                  <td className="p-2">
+                  <td className="p-1">
                     <div className="flex gap-2">
                       <button 
                         onClick={() => handleEdit(b.id)} 
@@ -819,8 +784,8 @@ export default function BookingsPage() {
                         className="text-red-600 hover:text-red-800"
                         title="Удалить"
                       >
-                      <FaTrash />
-                    </button>
+                        <FaTrash />
+                      </button>
                     </div>
                   </td>
                 </tr>
@@ -944,7 +909,7 @@ export default function BookingsPage() {
                     onChange={handleEditChange}
                     className="input w-full h-11"
                     min="0"
-                    step="100"
+                    step="0.01"
                   />
                 </div>
                 <div className="flex flex-col gap-1">
