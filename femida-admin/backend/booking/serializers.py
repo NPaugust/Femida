@@ -33,6 +33,10 @@ class RoomSerializer(serializers.ModelSerializer):
     building_id = serializers.PrimaryKeyRelatedField(queryset=Building.objects.all(), source='building', write_only=True)
     room_class = serializers.SerializerMethodField()
     def get_building(self, obj):
+        # Если obj — это dict (bulk create), берем из словаря
+        if isinstance(obj, dict):
+            return {'id': obj['building'], 'name': ''}
+        # Если obj — это модель Room
         return {'id': obj.building.id, 'name': obj.building.name}
     def get_room_class(self, obj):
         return {'value': obj.room_class, 'label': obj.get_room_class_display()}

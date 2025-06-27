@@ -3106,3 +3106,7 @@ INFO 2025-06-27 20:43:16,829 views 14200 3104 GuestViewSet.list called by user: 
 INFO 2025-06-27 20:43:16,834 basehttp 14200 3104 "GET /api/guests/ HTTP/1.1" 200 492
 INFO 2025-06-27 20:43:16,837 basehttp 14200 9448 "GET /api/bookings/ HTTP/1.1" 200 783
 WARNING 2025-06-27 20:45:17,269 log 1460 11420 Unauthorized: /api/guests/
+INFO 2025-06-27 21:13:14,708 autoreload 14200 9212 C:\Users\avgus\Desktop\femida\femida-admin\backend\booking\serializers.py changed, reloading.
+INFO 2025-06-27 21:13:15,236 autoreload 5448 12364 Watching for file changes with StatReloader
+INFO 2025-06-27 21:13:16,961 autoreload 5448 12364 C:\Users\avgus\Desktop\femida\femida-admin\backend\booking\serializers.py changed, reloading.
+INFO 2025-06-27 21:13:17,352 autoreload 6820 10828 Watching for file changes with StatReloader
