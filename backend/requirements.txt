@@ -1,0 +1,9 @@
+Django>=5.2.3
+psycopg2-binary
+drf-yasg
+django-phonenumber-field
+djangorestframework
+django-cors-headers
+djangorestframework-simplejwt
+django-jazzmin
+phonenumbers 
