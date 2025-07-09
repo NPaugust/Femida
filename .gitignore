@@ -8,6 +8,11 @@ frontend/.next/
 out/
 frontend/out/
 
+*.pyc
+__pycache__/
+node_modules/
+backend/venv/
+
 # logs
 logs/
 *.log
