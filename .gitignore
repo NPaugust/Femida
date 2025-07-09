@@ -55,3 +55,7 @@ frontend/next-env.d.ts
 coverage/
 frontend/coverage/
 backend/coverage/
+
+backend/venv/
+backend/staticfiles/
+backend/db.sqlite3
