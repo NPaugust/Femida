@@ -792,8 +792,8 @@ export default function RoomsPage() {
                   <td className="p-2 truncate max-w-[120px]" title={room.amenities}>{room.amenities}</td>
                   <td className="p-2 truncate max-w-[120px]" title={room.description}>{room.description}</td>
                   <td className="p-2 flex gap-2">
-                    <button data-action="edit" onClick={() => handleEdit(room)} className="text-yellow-600 hover:text-yellow-800" title="Редактировать"><FaEdit /></button>
-                    <button data-action="delete" onClick={() => handleDelete(room.id)} className="text-red-600 hover:text-red-800" title="Удалить"><FaTrash /></button>
+                    <button data-action="edit" onClick={e => { e.stopPropagation(); handleEdit(room); }} className="text-yellow-600 hover:text-yellow-800" title="Редактировать"><FaEdit /></button>
+                    <button data-action="delete" onClick={e => { e.stopPropagation(); handleDelete(room.id); }} className="text-red-600 hover:text-red-800" title="Удалить"><FaTrash /></button>
                   </td>
                 </tr>
                 );

@@ -4062,3 +4062,82 @@ INFO 2025-06-27 22:29:01,060 basehttp 11096 5968 "GET /api/buildings/ HTTP/1.1" 
 INFO 2025-06-27 22:29:01,063 basehttp 11096 8524 "GET /api/guests/ HTTP/1.1" 200 736
 INFO 2025-06-27 22:29:01,067 basehttp 11096 3832 "GET /api/bookings/ HTTP/1.1" 200 769
 INFO 2025-06-27 22:29:01,069 basehttp 11096 2652 "GET /api/rooms/ HTTP/1.1" 200 2087
+INFO 2025-06-27 22:38:57,779 basehttp 11096 4736 "OPTIONS /api/rooms/ HTTP/1.1" 200 0
+INFO 2025-06-27 22:38:57,779 basehttp 11096 10092 "OPTIONS /api/bookings/ HTTP/1.1" 200 0
+INFO 2025-06-27 22:38:57,779 basehttp 11096 4044 "OPTIONS /api/buildings/ HTTP/1.1" 200 0
+INFO 2025-06-27 22:38:57,791 basehttp 11096 4044 "GET /api/buildings/ HTTP/1.1" 200 185
+INFO 2025-06-27 22:38:57,796 basehttp 11096 10092 "GET /api/bookings/ HTTP/1.1" 200 769
+INFO 2025-06-27 22:38:57,797 basehttp 11096 4736 "GET /api/rooms/ HTTP/1.1" 200 2087
+INFO 2025-06-27 22:38:58,619 basehttp 11096 4044 "GET /api/buildings/ HTTP/1.1" 200 185
+INFO 2025-06-27 22:38:58,626 basehttp 11096 10092 "GET /api/rooms/ HTTP/1.1" 200 2087
+INFO 2025-06-27 22:38:58,627 basehttp 11096 4044 "GET /api/buildings/ HTTP/1.1" 200 185
+INFO 2025-06-27 22:38:58,638 basehttp 11096 4736 "GET /api/bookings/ HTTP/1.1" 200 769
+INFO 2025-06-27 22:38:58,640 basehttp 11096 10092 "GET /api/rooms/ HTTP/1.1" 200 2087
+INFO 2025-06-27 22:38:58,733 basehttp 11096 4736 "GET /api/bookings/ HTTP/1.1" 200 769
+INFO 2025-06-27 22:38:59,058 basehttp 11096 2844 "OPTIONS /api/guests/ HTTP/1.1" 200 0
+INFO 2025-06-27 22:38:59,065 views 11096 3976 GuestViewSet.list called by user: test (Супер Админ)
+INFO 2025-06-27 22:38:59,066 basehttp 11096 4044 "GET /api/buildings/ HTTP/1.1" 200 185
+INFO 2025-06-27 22:38:59,069 basehttp 11096 3976 "GET /api/guests/ HTTP/1.1" 200 736
+INFO 2025-06-27 22:38:59,073 basehttp 11096 4736 "GET /api/rooms/ HTTP/1.1" 200 2087
+INFO 2025-06-27 22:38:59,080 views 11096 3976 GuestViewSet.list called by user: test (Супер Админ)
+INFO 2025-06-27 22:38:59,080 basehttp 11096 4044 "GET /api/buildings/ HTTP/1.1" 200 185
+INFO 2025-06-27 22:38:59,085 basehttp 11096 3976 "GET /api/guests/ HTTP/1.1" 200 736
+INFO 2025-06-27 22:38:59,085 basehttp 11096 10092 "GET /api/bookings/ HTTP/1.1" 200 769
+INFO 2025-06-27 22:38:59,094 basehttp 11096 4736 "GET /api/rooms/ HTTP/1.1" 200 2087
+INFO 2025-06-27 22:38:59,097 basehttp 11096 10092 "GET /api/bookings/ HTTP/1.1" 200 769
+INFO 2025-06-27 22:38:59,608 views 11096 4736 GuestViewSet.list called by user: test (Супер Админ)
+INFO 2025-06-27 22:38:59,614 basehttp 11096 4736 "GET /api/guests/ HTTP/1.1" 200 736
+INFO 2025-06-27 22:38:59,614 basehttp 11096 10092 "GET /api/bookings/ HTTP/1.1" 200 769
+INFO 2025-06-27 22:39:01,231 basehttp 11096 4736 "OPTIONS /api/users/ HTTP/1.1" 200 0
+INFO 2025-06-27 22:39:01,237 basehttp 11096 10092 "GET /api/users/ HTTP/1.1" 200 266
+INFO 2025-06-27 22:39:01,243 basehttp 11096 4736 "GET /api/users/ HTTP/1.1" 200 266
+INFO 2025-06-27 22:39:01,962 views 11096 3976 GuestViewSet.list called by user: test (Супер Админ)
+INFO 2025-06-27 22:39:01,963 basehttp 11096 4044 "GET /api/buildings/ HTTP/1.1" 200 185
+INFO 2025-06-27 22:39:01,971 basehttp 11096 4736 "GET /api/rooms/ HTTP/1.1" 200 2087
+INFO 2025-06-27 22:39:01,971 basehttp 11096 3976 "GET /api/guests/ HTTP/1.1" 200 736
+INFO 2025-06-27 22:39:01,976 basehttp 11096 4044 "GET /api/buildings/ HTTP/1.1" 200 185
+INFO 2025-06-27 22:39:01,977 basehttp 11096 10092 "GET /api/bookings/ HTTP/1.1" 200 769
+INFO 2025-06-27 22:39:01,978 views 11096 3976 GuestViewSet.list called by user: test (Супер Админ)
+INFO 2025-06-27 22:39:01,985 basehttp 11096 3976 "GET /api/guests/ HTTP/1.1" 200 736
+INFO 2025-06-27 22:39:01,990 basehttp 11096 4736 "GET /api/rooms/ HTTP/1.1" 200 2087
+INFO 2025-06-27 22:39:01,992 basehttp 11096 10092 "GET /api/bookings/ HTTP/1.1" 200 769
+INFO 2025-06-27 22:39:02,810 basehttp 11096 3976 "GET /api/buildings/ HTTP/1.1" 200 185
+INFO 2025-06-27 22:39:02,813 basehttp 11096 4736 "GET /api/bookings/ HTTP/1.1" 200 769
+INFO 2025-06-27 22:39:02,816 basehttp 11096 10092 "GET /api/rooms/ HTTP/1.1" 200 2087
+INFO 2025-06-27 22:39:02,822 basehttp 11096 3976 "GET /api/buildings/ HTTP/1.1" 200 185
+INFO 2025-06-27 22:39:02,830 basehttp 11096 10092 "GET /api/rooms/ HTTP/1.1" 200 2087
+INFO 2025-06-27 22:39:02,831 basehttp 11096 4736 "GET /api/bookings/ HTTP/1.1" 200 769
+INFO 2025-06-27 22:39:03,070 views 11096 3976 GuestViewSet.list called by user: test (Супер Админ)
+INFO 2025-06-27 22:39:03,075 basehttp 11096 4044 "GET /api/buildings/ HTTP/1.1" 200 185
+INFO 2025-06-27 22:39:03,082 basehttp 11096 3976 "GET /api/guests/ HTTP/1.1" 200 736
+INFO 2025-06-27 22:39:03,083 basehttp 11096 10092 "GET /api/bookings/ HTTP/1.1" 200 769
+INFO 2025-06-27 22:39:03,084 basehttp 11096 4736 "GET /api/rooms/ HTTP/1.1" 200 2087
+INFO 2025-06-27 22:39:03,587 basehttp 11096 3976 "GET /api/buildings/ HTTP/1.1" 200 185
+INFO 2025-06-27 22:39:03,595 basehttp 11096 4736 "GET /api/bookings/ HTTP/1.1" 200 769
+INFO 2025-06-27 22:39:03,596 basehttp 11096 10092 "GET /api/rooms/ HTTP/1.1" 200 2087
+INFO 2025-06-27 22:39:03,862 basehttp 11096 4044 "OPTIONS /api/auditlog/?limit=10 HTTP/1.1" 200 0
+INFO 2025-06-27 22:39:03,865 views 11096 3976 GuestViewSet.list called by user: test (Супер Админ)
+INFO 2025-06-27 22:39:03,874 basehttp 11096 3976 "GET /api/guests/ HTTP/1.1" 200 736
+INFO 2025-06-27 22:39:03,877 basehttp 11096 10092 "GET /api/bookings/ HTTP/1.1" 200 769
+INFO 2025-06-27 22:39:03,881 basehttp 11096 4736 "GET /api/rooms/ HTTP/1.1" 200 2087
+INFO 2025-06-27 22:39:03,883 views 11096 3976 GuestViewSet.list called by user: test (Супер Админ)
+INFO 2025-06-27 22:39:03,888 basehttp 11096 4044 "GET /api/auditlog/?limit=10 HTTP/1.1" 200 17241
+INFO 2025-06-27 22:39:03,892 basehttp 11096 3976 "GET /api/guests/ HTTP/1.1" 200 736
+INFO 2025-06-27 22:39:03,902 basehttp 11096 10092 "GET /api/bookings/ HTTP/1.1" 200 769
+INFO 2025-06-27 22:39:03,905 basehttp 11096 4736 "GET /api/rooms/ HTTP/1.1" 200 2087
+INFO 2025-06-27 22:39:03,909 basehttp 11096 4044 "GET /api/auditlog/?limit=10 HTTP/1.1" 200 17241
+INFO 2025-06-27 22:39:11,241 basehttp 11096 4736 "GET /api/buildings/ HTTP/1.1" 200 185
+INFO 2025-06-27 22:39:11,249 basehttp 11096 10092 "GET /api/bookings/ HTTP/1.1" 200 769
+INFO 2025-06-27 22:39:11,251 basehttp 11096 4044 "GET /api/rooms/ HTTP/1.1" 200 2087
+INFO 2025-06-27 22:39:12,101 views 11096 10092 GuestViewSet.list called by user: test (Супер Админ)
+INFO 2025-06-27 22:39:12,110 basehttp 11096 10092 "GET /api/guests/ HTTP/1.1" 200 736
+INFO 2025-06-27 22:39:12,111 basehttp 11096 3976 "GET /api/buildings/ HTTP/1.1" 200 185
+INFO 2025-06-27 22:39:12,112 basehttp 11096 4044 "GET /api/bookings/ HTTP/1.1" 200 769
+INFO 2025-06-27 22:39:12,115 basehttp 11096 4736 "GET /api/rooms/ HTTP/1.1" 200 2087
+INFO 2025-06-27 22:39:15,675 basehttp 11096 10092 "GET /api/rooms/ HTTP/1.1" 200 2087
+INFO 2025-06-27 22:39:15,676 basehttp 11096 4044 "GET /api/bookings/ HTTP/1.1" 200 769
+INFO 2025-06-27 22:39:15,681 basehttp 11096 4736 "GET /api/buildings/ HTTP/1.1" 200 185
+INFO 2025-06-27 22:39:15,693 basehttp 11096 10092 "GET /api/bookings/ HTTP/1.1" 200 769
+INFO 2025-06-27 22:39:15,695 basehttp 11096 4044 "GET /api/rooms/ HTTP/1.1" 200 2087
+INFO 2025-06-27 22:39:15,697 basehttp 11096 4736 "GET /api/buildings/ HTTP/1.1" 200 185
+INFO 2025-07-09 11:00:38,906 autoreload 11076 5136 Watching for file changes with StatReloader
