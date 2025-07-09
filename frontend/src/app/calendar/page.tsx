@@ -250,73 +250,73 @@ export default function CalendarPage() {
             onChange={e => setFilterBuilding(e.target.value)} 
             className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
           >
-            <option value="">Все корпуса</option>
-            {buildings.map(b => <option key={b.id} value={b.id}>{b.name}</option>)}
-          </select>
+          <option value="">Все корпуса</option>
+          {buildings.map(b => <option key={b.id} value={b.id}>{b.name}</option>)}
+        </select>
           
           <select 
             value={filterStatus} 
             onChange={e => setFilterStatus(e.target.value)} 
             className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
           >
-            <option value="">Все статусы</option>
-            <option value="free">Свободен</option>
-            <option value="busy">Занят</option>
-            <option value="repair">На ремонте</option>
-          </select>
+          <option value="">Все статусы</option>
+          <option value="free">Свободен</option>
+          <option value="busy">Занят</option>
+          <option value="repair">На ремонте</option>
+        </select>
           
           <select 
             value={filterType} 
             onChange={e => setFilterType(e.target.value)} 
             className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
           >
-            <option value="">Все типы</option>
-            {[...new Set(rooms.map(r => r.room_type))].map(type => <option key={type} value={type}>{type}</option>)}
-          </select>
+          <option value="">Все типы</option>
+          {[...new Set(rooms.map(r => r.room_type))].map(type => <option key={type} value={type}>{type}</option>)}
+        </select>
           
           <select 
             value={filterClass} 
             onChange={e => setFilterClass(e.target.value)} 
             className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
           >
-            <option value="">Все классы</option>
-            <option value="standard">Стандарт</option>
-            <option value="semi_lux">Полу-люкс</option>
-            <option value="lux">Люкс</option>
-            <option value="vip">ВИП</option>
-            <option value="proraba">Дом прораба</option>
-            <option value="aurora">Аврора</option>
-            <option value="domik">Домик</option>
-          </select>
+          <option value="">Все классы</option>
+          <option value="standard">Стандарт</option>
+          <option value="semi_lux">Полу-люкс</option>
+          <option value="lux">Люкс</option>
+          <option value="vip">ВИП</option>
+          <option value="proraba">Дом прораба</option>
+          <option value="aurora">Аврора</option>
+          <option value="domik">Домик</option>
+        </select>
           
           <div className="flex gap-2">
-            <button
+        <button
               className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg transition-colors"
-              onClick={() => setCurrentDate(prev => new Date(prev.getFullYear(), prev.getMonth() - 1, 1))}
-            >
-              <FaChevronLeft /> Предыдущий месяц
-            </button>
-            <button
+          onClick={() => setCurrentDate(prev => new Date(prev.getFullYear(), prev.getMonth() - 1, 1))}
+        >
+          <FaChevronLeft /> Предыдущий месяц
+        </button>
+        <button
               className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg transition-colors"
-              onClick={() => setCurrentDate(prev => new Date(prev.getFullYear(), prev.getMonth() + 1, 1))}
-            >
-              Следующий месяц <FaChevronRight />
-            </button>
-          </div>
+          onClick={() => setCurrentDate(prev => new Date(prev.getFullYear(), prev.getMonth() + 1, 1))}
+        >
+          Следующий месяц <FaChevronRight />
+        </button>
+      </div>
         </div>
       </div>
 
       <div className="bg-white rounded-lg shadow-lg p-6">
-        <Calendar
-          localizer={localizer}
-          events={filteredEvents}
-          startAccessor="start"
-          endAccessor="end"
-          style={{ height: 400 }}
-          date={currentDate}
-          onNavigate={(date: Date) => setCurrentDate(date)}
-          components={{ toolbar: () => null }}
-          eventPropGetter={(event: any) => {
+      <Calendar
+        localizer={localizer}
+        events={filteredEvents}
+        startAccessor="start"
+        endAccessor="end"
+        style={{ height: 400 }}
+        date={currentDate}
+        onNavigate={(date: Date) => setCurrentDate(date)}
+        components={{ toolbar: () => null }}
+        eventPropGetter={(event: any) => {
             const status = event.resource.room?.status;
             if (status === "busy") return { 
               style: { 
@@ -345,8 +345,10 @@ export default function CalendarPage() {
                 fontWeight: "600"
               } 
             };
-          }}
+        }}
           onSelectEvent={(event: any, e: any) => {
+            // Не показывать тултип, если клик по кнопке действия
+            if (e && e.target && e.target.closest && e.target.closest('button[data-action="edit"],button[data-action="delete"]')) return;
             // Показываем тултип при клике, позиция — рядом с курсором
             if (e && e.clientX && e.clientY) {
               setTooltipPosition({ x: e.clientX, y: e.clientY });
