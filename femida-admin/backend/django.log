@@ -4141,3 +4141,82 @@ INFO 2025-06-27 22:39:15,693 basehttp 11096 10092 "GET /api/bookings/ HTTP/1.1" 
 INFO 2025-06-27 22:39:15,695 basehttp 11096 4044 "GET /api/rooms/ HTTP/1.1" 200 2087
 INFO 2025-06-27 22:39:15,697 basehttp 11096 4736 "GET /api/buildings/ HTTP/1.1" 200 185
 INFO 2025-07-09 11:00:38,906 autoreload 11076 5136 Watching for file changes with StatReloader
+INFO 2025-07-09 11:00:42,796 basehttp 11076 10212 "OPTIONS /api/users/me/ HTTP/1.1" 200 0
+INFO 2025-07-09 11:00:42,796 basehttp 11076 10948 "OPTIONS /api/bookings/ HTTP/1.1" 200 0
+INFO 2025-07-09 11:00:42,796 basehttp 11076 1504 "OPTIONS /api/rooms/ HTTP/1.1" 200 0
+INFO 2025-07-09 11:00:42,796 basehttp 11076 1560 "OPTIONS /api/guests/ HTTP/1.1" 200 0
+INFO 2025-07-09 11:00:42,796 basehttp 11076 4936 "OPTIONS /api/auditlog/?limit=10 HTTP/1.1" 200 0
+WARNING 2025-07-09 11:00:42,819 log 11076 7540 Unauthorized: /api/users/me/
+WARNING 2025-07-09 11:00:42,819 log 11076 10212 Unauthorized: /api/rooms/
+WARNING 2025-07-09 11:00:42,819 log 11076 1504 Unauthorized: /api/guests/
+WARNING 2025-07-09 11:00:42,820 log 11076 1560 Unauthorized: /api/bookings/
+WARNING 2025-07-09 11:00:42,820 log 11076 10948 Unauthorized: /api/auditlog/
+WARNING 2025-07-09 11:00:42,821 basehttp 11076 7540 "GET /api/users/me/ HTTP/1.1" 401 183
+WARNING 2025-07-09 11:00:42,821 basehttp 11076 10212 "GET /api/rooms/ HTTP/1.1" 401 183
+WARNING 2025-07-09 11:00:42,821 basehttp 11076 1504 "GET /api/guests/ HTTP/1.1" 401 183
+WARNING 2025-07-09 11:00:42,822 basehttp 11076 1560 "GET /api/bookings/ HTTP/1.1" 401 183
+WARNING 2025-07-09 11:00:42,822 basehttp 11076 10948 "GET /api/auditlog/?limit=10 HTTP/1.1" 401 183
+WARNING 2025-07-09 11:00:42,824 log 11076 7540 Unauthorized: /api/rooms/
+WARNING 2025-07-09 11:00:42,826 log 11076 10212 Unauthorized: /api/users/me/
+WARNING 2025-07-09 11:00:42,827 log 11076 1504 Unauthorized: /api/guests/
+WARNING 2025-07-09 11:00:42,828 log 11076 1560 Unauthorized: /api/auditlog/
+WARNING 2025-07-09 11:00:42,829 log 11076 10948 Unauthorized: /api/bookings/
+WARNING 2025-07-09 11:00:42,830 basehttp 11076 7540 "GET /api/rooms/ HTTP/1.1" 401 183
+WARNING 2025-07-09 11:00:42,831 basehttp 11076 10212 "GET /api/users/me/ HTTP/1.1" 401 183
+WARNING 2025-07-09 11:00:42,831 basehttp 11076 1504 "GET /api/guests/ HTTP/1.1" 401 183
+WARNING 2025-07-09 11:00:42,832 basehttp 11076 1560 "GET /api/auditlog/?limit=10 HTTP/1.1" 401 183
+WARNING 2025-07-09 11:00:42,832 basehttp 11076 10948 "GET /api/bookings/ HTTP/1.1" 401 183
+INFO 2025-07-09 11:00:51,635 basehttp 11076 2328 "OPTIONS /api/auth/token/ HTTP/1.1" 200 0
+WARNING 2025-07-09 11:00:52,241 log 11076 2328 Unauthorized: /api/auth/token/
+WARNING 2025-07-09 11:00:52,242 basehttp 11076 2328 "POST /api/auth/token/ HTTP/1.1" 401 63
+WARNING 2025-07-09 11:00:55,102 log 11076 2328 Unauthorized: /api/auth/token/
+WARNING 2025-07-09 11:00:55,103 basehttp 11076 2328 "POST /api/auth/token/ HTTP/1.1" 401 63
+WARNING 2025-07-09 11:00:58,814 log 11076 2328 Unauthorized: /api/auth/token/
+WARNING 2025-07-09 11:00:58,814 basehttp 11076 2328 "POST /api/auth/token/ HTTP/1.1" 401 63
+WARNING 2025-07-09 11:01:01,696 log 11076 2328 Unauthorized: /api/auth/token/
+WARNING 2025-07-09 11:01:01,697 basehttp 11076 2328 "POST /api/auth/token/ HTTP/1.1" 401 63
+INFO 2025-07-09 11:01:06,773 basehttp 11076 2328 "POST /api/auth/token/ HTTP/1.1" 200 483
+INFO 2025-07-09 11:01:06,779 basehttp 11076 2328 "OPTIONS /api/users/me/ HTTP/1.1" 200 0
+INFO 2025-07-09 11:01:06,784 basehttp 11076 2328 "GET /api/users/me/ HTTP/1.1" 200 119
+INFO 2025-07-09 11:01:07,040 basehttp 11076 5940 "OPTIONS /api/bookings/ HTTP/1.1" 200 0
+INFO 2025-07-09 11:01:07,040 basehttp 11076 9848 "OPTIONS /api/rooms/ HTTP/1.1" 200 0
+INFO 2025-07-09 11:01:07,041 basehttp 11076 2328 "GET /api/users/me/ HTTP/1.1" 200 119
+INFO 2025-07-09 11:01:07,042 basehttp 11076 6112 "OPTIONS /api/guests/ HTTP/1.1" 200 0
+INFO 2025-07-09 11:01:07,048 basehttp 11076 3984 "OPTIONS /api/auditlog/?limit=10 HTTP/1.1" 200 0
+INFO 2025-07-09 11:01:07,055 views 11076 9848 GuestViewSet.list called by user: test (Супер Админ)
+INFO 2025-07-09 11:01:07,056 basehttp 11076 5940 "GET /api/users/me/ HTTP/1.1" 200 119
+INFO 2025-07-09 11:01:07,063 basehttp 11076 9848 "GET /api/guests/ HTTP/1.1" 200 736
+INFO 2025-07-09 11:01:07,073 views 11076 9848 GuestViewSet.list called by user: test (Супер Админ)
+INFO 2025-07-09 11:01:07,074 basehttp 11076 10404 "GET /api/rooms/ HTTP/1.1" 200 2087
+INFO 2025-07-09 11:01:07,078 basehttp 11076 9848 "GET /api/guests/ HTTP/1.1" 200 736
+INFO 2025-07-09 11:01:07,090 basehttp 11076 10404 "GET /api/rooms/ HTTP/1.1" 200 2087
+INFO 2025-07-09 11:01:07,090 basehttp 11076 6112 "GET /api/auditlog/?limit=10 HTTP/1.1" 200 17241
+INFO 2025-07-09 11:01:07,090 basehttp 11076 2328 "GET /api/bookings/ HTTP/1.1" 200 769
+INFO 2025-07-09 11:01:07,106 basehttp 11076 10404 "GET /api/auditlog/?limit=10 HTTP/1.1" 200 17241
+INFO 2025-07-09 11:01:07,106 basehttp 11076 6112 "GET /api/bookings/ HTTP/1.1" 200 769
+INFO 2025-07-09 11:01:10,420 basehttp 11076 10404 "OPTIONS /api/users/ HTTP/1.1" 200 0
+INFO 2025-07-09 11:01:10,426 basehttp 11076 6112 "GET /api/users/ HTTP/1.1" 200 266
+INFO 2025-07-09 11:01:10,431 basehttp 11076 10404 "GET /api/users/ HTTP/1.1" 200 266
+INFO 2025-07-09 11:01:13,636 views 11076 2328 GuestViewSet.list called by user: test (Супер Админ)
+INFO 2025-07-09 11:01:13,643 basehttp 11076 10404 "GET /api/bookings/ HTTP/1.1" 200 769
+INFO 2025-07-09 11:01:13,643 basehttp 11076 2328 "GET /api/guests/ HTTP/1.1" 200 736
+INFO 2025-07-09 11:01:13,673 views 11076 2328 GuestViewSet.list called by user: test (Супер Админ)
+INFO 2025-07-09 11:01:13,681 basehttp 11076 9848 "GET /api/auditlog/?limit=10 HTTP/1.1" 200 17241
+INFO 2025-07-09 11:01:13,681 basehttp 11076 6112 "GET /api/rooms/ HTTP/1.1" 200 2087
+INFO 2025-07-09 11:01:13,682 basehttp 11076 2328 "GET /api/guests/ HTTP/1.1" 200 736
+INFO 2025-07-09 11:01:13,690 basehttp 11076 10404 "GET /api/bookings/ HTTP/1.1" 200 769
+INFO 2025-07-09 11:01:13,700 basehttp 11076 9848 "GET /api/auditlog/?limit=10 HTTP/1.1" 200 17241
+INFO 2025-07-09 11:01:13,702 basehttp 11076 6112 "GET /api/rooms/ HTTP/1.1" 200 2087
+INFO 2025-07-09 11:01:16,355 basehttp 11076 6112 "OPTIONS /api/buildings/ HTTP/1.1" 200 0
+INFO 2025-07-09 11:01:16,361 basehttp 11076 9848 "GET /api/bookings/ HTTP/1.1" 200 769
+INFO 2025-07-09 11:01:16,363 basehttp 11076 6112 "GET /api/buildings/ HTTP/1.1" 200 185
+INFO 2025-07-09 11:01:16,375 basehttp 11076 10404 "GET /api/rooms/ HTTP/1.1" 200 2087
+INFO 2025-07-09 11:01:26,490 basehttp 11076 10404 "GET /api/buildings/ HTTP/1.1" 200 185
+INFO 2025-07-09 11:01:26,495 basehttp 11076 9848 "GET /api/bookings/ HTTP/1.1" 200 769
+INFO 2025-07-09 11:01:26,496 basehttp 11076 10404 "GET /api/buildings/ HTTP/1.1" 200 185
+INFO 2025-07-09 11:01:26,507 basehttp 11076 6112 "GET /api/rooms/ HTTP/1.1" 200 2087
+INFO 2025-07-09 11:01:26,520 basehttp 11076 9848 "GET /api/bookings/ HTTP/1.1" 200 769
+INFO 2025-07-09 11:01:26,521 basehttp 11076 10404 "GET /api/rooms/ HTTP/1.1" 200 2087
+INFO 2025-07-09 11:01:27,484 basehttp 11076 10404 "GET /api/buildings/ HTTP/1.1" 200 185
+INFO 2025-07-09 11:01:27,490 basehttp 11076 9848 "GET /api/bookings/ HTTP/1.1" 200 769
+INFO 2025-07-09 11:01:27,492 basehttp 11076 6112 "GET /api/rooms/ HTTP/1.1" 200 2087

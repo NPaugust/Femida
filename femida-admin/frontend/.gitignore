@@ -17,6 +17,22 @@
 /.next/
 /out/
 
+# log
+/logs
+*.log
+*.log.*
+*.log.*.*
+*.log.*.*.*
+*.log.*.*.*.*
+*.log.*.*.*.*.*
+*.log.*.*.*.*.*.*
+backend/logs/*.log
+backend/logs/*.log.*
+backend/logs/*.log.*.*
+backend/logs/*.log.*.*.*
+backend/logs/*.log.*.*.*.*
+backend/logs/*.log.*.*.*.*.*
+
 # production
 /build
 
