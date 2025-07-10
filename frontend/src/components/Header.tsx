@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react';
 import { FaUserCircle, FaSignOutAlt, FaCog, FaQuestionCircle } from 'react-icons/fa';
 import { API_URL } from '../shared/api';
 import { useTranslation } from 'react-i18next';
+import { useAuth } from '../shared/hooks/useAuth';
 
 // SVG Lady Justice (упрощённая векторизация)
 const LadyJusticeLogo = () => (
@@ -44,6 +45,7 @@ export default function Header() {
     last_name: '',
   });
   const { i18n } = useTranslation();
+  const { logout } = useAuth();
 
   useEffect(() => {
     const fetchUser = async () => {
@@ -80,9 +82,7 @@ export default function Header() {
   }, []);
 
   const handleLogout = () => {
-    localStorage.removeItem('access');
-    localStorage.removeItem('refresh');
-    localStorage.removeItem('role');
+    logout();
     window.location.href = '/login';
   };
 

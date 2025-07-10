@@ -81,8 +81,7 @@ export default function Dashboard() {
   useEffect(() => {
     const token = localStorage.getItem("access");
     if (!token) {
-      window.location.href = "/login";
-      return;
+      return; // Middleware уже перенаправит на /login
     }
     setLoading(true);
     Promise.all([

@@ -4,6 +4,7 @@ import { useTranslation } from 'react-i18next';
 import Sidebar from './Sidebar';
 import Header from './Header';
 import { usePathname } from 'next/navigation';
+import ProtectedRoute from './ProtectedRoute';
 
 export default function ClientLayout({ children }: { children: React.ReactNode }) {
   const { i18n } = useTranslation();
@@ -19,12 +20,14 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
   }
 
   return (
-    <div className="flex min-h-screen">
-      <Sidebar onLogout={() => {}} />
-      <div className="flex-1 flex flex-col ml-64 min-h-screen">
-        <Header />
-        <main className="flex-1 p-8">{children}</main>
+    <ProtectedRoute>
+      <div className="flex min-h-screen">
+        <Sidebar onLogout={() => {}} />
+        <div className="flex-1 flex flex-col ml-64 min-h-screen">
+          <Header />
+          <main className="flex-1 p-8">{children}</main>
+        </div>
       </div>
-    </div>
+    </ProtectedRoute>
   );
 } 

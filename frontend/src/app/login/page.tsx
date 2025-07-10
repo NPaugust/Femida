@@ -3,12 +3,14 @@
 import { useState } from 'react';
 import { API_URL } from '../../shared/api';
 import { FiUser, FiLock } from 'react-icons/fi';
+import { useAuth } from '../../shared/hooks/useAuth';
 
 export default function LoginPage() {
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  const { login } = useAuth();
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -22,12 +24,12 @@ export default function LoginPage() {
       });
       const data = await res.json();
       if (res.ok && data.access) {
-        localStorage.setItem('access', data.access);
-        localStorage.setItem('refresh', data.refresh);
-        localStorage.setItem('role', data.role);
         const resUser = await fetch(`${API_URL}/api/users/me/`, { headers: { Authorization: `Bearer ${data.access}` } });
         const user = await resUser.json();
-        localStorage.setItem('role', user.role);
+        
+        // Используем хук для логина
+        login(data.access, data.refresh, user.role);
+        
         window.location.href = '/';
       } else {
         setError('Неверный логин или пароль');
