@@ -51,4 +51,6 @@ export const useApi = () => {
     handleApiRequest,
     handleApiRequestWithAuth,
   };
-}; 
+};
+
+export default useApi; 

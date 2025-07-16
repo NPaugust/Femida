@@ -42,17 +42,10 @@ class Room(models.Model):
         max_length=40,
         choices=[
             ('standard', 'Стандарт'),
-            ('lux', 'Люкс'),
             ('semi_lux', 'Полу-люкс'),
-            ('vip', 'ВИП'),
-            ('proraba', 'Дом прораба'),
-            ('aurora', 'Аврора'),
-            ('domik', 'Домик'),
-            ('three_floor_lux', '3-х этажка люкс'),
-            ('middle_vip_lux', 'Средний ВИП люкс'),
-            ('pink', 'Розовый'),
-            ('sklad', 'Склад'),
-            ('other', 'Другое'),
+            ('lux', 'Люкс')
+
+
         ],
         default='standard',
         verbose_name="Класс комнаты"
@@ -68,9 +61,17 @@ class Room(models.Model):
     price_per_night = models.DecimalField(max_digits=8, decimal_places=2, default=0, verbose_name="Цена за сутки")
     rooms_count = models.PositiveIntegerField(default=1, verbose_name="Количество комнат")
     amenities = models.CharField(max_length=255, blank=True, verbose_name="Удобства (через запятую)")
+    is_deleted = models.BooleanField(default=False, verbose_name="Удалён")
 
     def __str__(self):
         return f"{self.building.name} - {self.number}"
+
+    def soft_delete(self):
+        self.is_deleted = True
+        self.save()
+    def restore(self):
+        self.is_deleted = False
+        self.save()
 
 class Guest(models.Model):
     full_name = models.CharField(max_length=100, verbose_name="ФИО")
@@ -94,15 +95,23 @@ class Guest(models.Model):
         default='active',
         verbose_name="Статус"
     )
+    is_deleted = models.BooleanField(default=False, verbose_name="Удалён")
 
     def __str__(self):
         return self.full_name
 
+    def soft_delete(self):
+        self.is_deleted = True
+        self.save()
+    def restore(self):
+        self.is_deleted = False
+        self.save()
+
 class Booking(models.Model):
     guest = models.ForeignKey(Guest, on_delete=models.CASCADE, related_name="bookings", verbose_name="Гость")
     room = models.ForeignKey(Room, on_delete=models.CASCADE, related_name="bookings", verbose_name="Комната")
-    check_in = models.DateField(verbose_name="Дата заезда")
-    check_out = models.DateField(verbose_name="Дата выезда")
+    check_in = models.DateTimeField(verbose_name="Дата и время заезда")
+    check_out = models.DateTimeField(verbose_name="Дата и время выезда")
     people_count = models.PositiveIntegerField(verbose_name="Количество гостей")
     status = models.CharField(
         max_length=20,
@@ -138,6 +147,7 @@ class Booking(models.Model):
     total_amount = models.DecimalField(max_digits=10, decimal_places=2, default=0, verbose_name="Общая сумма")
     created_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, verbose_name="Кто создал")
     created_at = models.DateTimeField(auto_now_add=True, verbose_name="Создано")
+    is_deleted = models.BooleanField(default=False, verbose_name="Удалён")
 
     def __str__(self):
         return f"{self.guest.full_name} - {self.room} ({self.check_in} - {self.check_out})"
@@ -159,6 +169,13 @@ class Booking(models.Model):
     def date_to(self):
         """Совместимость с фронтендом"""
         return self.check_out
+
+    def soft_delete(self):
+        self.is_deleted = True
+        self.save()
+    def restore(self):
+        self.is_deleted = False
+        self.save()
 
 class AuditLog(models.Model):
     user = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, verbose_name="Пользователь")

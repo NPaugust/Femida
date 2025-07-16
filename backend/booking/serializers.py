@@ -44,13 +44,15 @@ class RoomSerializer(serializers.ModelSerializer):
         model = Room
         fields = [
             'id', 'building', 'building_id', 'number', 'capacity', 'room_type', 'room_class', 'status', 'description',
-            'is_active', 'price_per_night', 'rooms_count', 'amenities'
+            'is_active', 'price_per_night', 'rooms_count', 'amenities', 'is_deleted'
         ]
+        read_only_fields = ['is_deleted']
 
 class GuestSerializer(serializers.ModelSerializer):
     class Meta:
         model = Guest
         fields = '__all__'
+        read_only_fields = ['is_deleted']
 
     def validate_full_name(self, value):
         """Валидация ФИО"""
@@ -123,9 +125,7 @@ class BookingSerializer(serializers.ModelSerializer):
     guest_id = serializers.PrimaryKeyRelatedField(queryset=Guest.objects.all(), source='guest', write_only=True)
     room = serializers.SerializerMethodField()
     room_id = serializers.PrimaryKeyRelatedField(queryset=Room.objects.all(), source='room', write_only=True)
-    date_from = serializers.DateField(source='check_in', read_only=True)
-    date_to = serializers.DateField(source='check_out', read_only=True)
-    
+    # Удаляем date_from и date_to
     def get_room(self, obj):
         r = obj.room
         return {
@@ -141,11 +141,11 @@ class BookingSerializer(serializers.ModelSerializer):
         model = Booking
         fields = [
             'id', 'guest', 'guest_id', 'room', 'room_id',
-            'check_in', 'check_out', 'date_from', 'date_to', 'people_count', 'status', 
+            'check_in', 'check_out', 'people_count', 'status', 
             'payment_status', 'payment_amount', 'payment_method', 'comments', 'total_amount',
-            'created_by', 'created_at'
+            'created_by', 'created_at', 'is_deleted'
         ]
-        read_only_fields = ['created_by', 'created_at', 'total_amount']
+        read_only_fields = ['created_by', 'created_at', 'total_amount', 'is_deleted']
 
 class AuditLogSerializer(serializers.ModelSerializer):
     class Meta:

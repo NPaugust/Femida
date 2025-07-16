@@ -75,17 +75,10 @@ type Building = { id: number; name: string };
 
 const ROOM_CLASS_LABELS: Record<string, string> = {
   standard: 'Стандарт',
-  lux: 'Люкс',
   semi_lux: 'Полу-люкс',
-  vip: 'ВИП',
-  proraba: 'Дом прораба',
-  aurora: 'Аврора',
-  domik: 'Домик',
-  three_floor_lux: '3-х этажка люкс',
-  middle_vip_lux: 'Средний ВИП люкс',
-  pink: 'Розовый',
-  sklad: 'Склад',
-  other: 'Другое',
+  lux: 'Люкс'
+
+
 };
 
 // Кастомный тултип компонент с поддержкой перевода и кнопкой закрытия
@@ -283,10 +276,7 @@ export default function CalendarPage() {
           <option value="standard">Стандарт</option>
           <option value="semi_lux">Полу-люкс</option>
           <option value="lux">Люкс</option>
-          <option value="vip">ВИП</option>
-          <option value="proraba">Дом прораба</option>
-          <option value="aurora">Аврора</option>
-          <option value="domik">Домик</option>
+
         </select>
           
           <div className="flex gap-2">

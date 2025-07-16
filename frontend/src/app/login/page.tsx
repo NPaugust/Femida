@@ -30,7 +30,7 @@ export default function LoginPage() {
         // Используем хук для логина
         login(data.access, data.refresh, user.role);
         
-        window.location.href = '/';
+        window.location.href = '/dashboard';
       } else {
         setError('Неверный логин или пароль');
       }

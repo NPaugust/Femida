@@ -1,166 +1,421 @@
 'use client';
 
-import { useEffect, useState } from 'react';
-// @ts-ignore
-import { saveAs } from 'file-saver';
-import { useTranslation } from 'react-i18next';
-import { FaCalendarCheck, FaTrash, FaFileCsv, FaPlus, FaEdit, FaMoneyBillWave, FaCreditCard, FaCheckCircle, FaTimesCircle, FaChartBar, FaQuestionCircle } from 'react-icons/fa';
+import React, { useEffect, useState, useRef } from 'react';
+import { FaPlus, FaEdit, FaTrash, FaFilter, FaFileCsv, FaList, FaCalendarAlt, FaStream, FaSpinner } from 'react-icons/fa';
 import { API_URL } from '../../shared/api';
-import dynamic from 'next/dynamic';
+import { useApi } from '../../shared/hooks/useApi';
+import ReactSelect from 'react-select';
+import DatePicker from 'react-datepicker';
 import 'react-datepicker/dist/react-datepicker.css';
-import DatePickerClient from '../../components/DatePickerClient';
-import { useSearchParams } from 'next/navigation';
-import ConfirmModal from '../../components/ConfirmModal';
+import { ru } from 'date-fns/locale';
+import { toZonedTime, format as formatTz } from 'date-fns-tz';
+const TIMEZONE = 'Asia/Bishkek';
+import BookingTable from './BookingTable';
+import BookingCalendar from './BookingCalendar';
 
-type RoomClass = string | { value: string; label: string };
-
-type Room = {
+// Типы данных
+interface Room {
   id: number;
   number: string;
-  room_class: RoomClass;
-  capacity: number;
-  building: number;
-  status: string;
-};
-
-type Guest = {
-  id: number;
-  full_name: string;
-  inn: string;
-  phone: string;
-};
-
-type Booking = {
+  room_class: string | { value: string; label: string };
+  capacity: number; // добавлено поле вместимости
+}
+interface Booking {
   id: number;
   room: Room;
-  guest: Guest;
-  date_from: string;
-  date_to: string;
-  people_count: number;
   check_in: string;
   check_out: string;
-  payment_status: string;
-  payment_amount: number;
-  payment_method: string;
-  comments: string;
-  total_amount: number;
-};
-
-const ROOM_CLASS_LABELS: Record<string, string> = {
-  standard: 'Стандарт',
-  semi_lux: 'Полу-люкс',
-  lux: 'Люкс',
-};
-
-const PAYMENT_STATUSES = [
-  { value: 'pending', label: 'Ожидает оплаты', color: 'bg-yellow-200 text-yellow-800' },
-  { value: 'paid', label: 'Оплачено', color: 'bg-green-200 text-green-800' },
-  { value: 'partial', label: 'Частично оплачено', color: 'bg-blue-200 text-blue-800' },
-  { value: 'cancelled', label: 'Отменено', color: 'bg-red-200 text-red-800' },
-];
-
-const PAYMENT_METHODS = [
-  { value: 'cash', label: 'Наличные' },
-  { value: 'card', label: 'Банковская карта' },
-  { value: 'transfer', label: 'Банковский перевод' },
-  { value: 'online', label: 'Онлайн оплата' },
-  { value: 'other', label: 'Другое' },
-];
-
-function formatDate(dateStr: string) {
-  if (!dateStr) return '';
-  const d = new Date(dateStr);
-  if (isNaN(d.getTime())) return dateStr;
-  return d.toLocaleString('ru-RU', { hour: '2-digit', minute: '2-digit', day: '2-digit', month: '2-digit', year: 'numeric' });
+  status: string;
+  related_order?: string;
+  guest?: Guest;
+  people_count?: number;
+  comments?: string;
 }
 
-// Добавить функцию для доступа к вложенным полям:
-function getFieldValue(obj: any, path: string) {
-  return path.split('.').reduce((acc, part) => acc && acc[part], obj);
+interface Guest {
+  id: number;
+  full_name: string;
 }
 
-function toYMD(dateStr: string): string {
-  if (!dateStr) return '';
-  const d = new Date(dateStr);
-  if (isNaN(d.getTime())) return dateStr;
-  return d.toISOString().split('T')[0];
+const STATUS_COLORS: Record<string, string> = {
+  active: 'bg-green-100 text-green-800 border-green-300',
+  completed: 'bg-red-100 text-red-800 border-red-300',
+  cancelled: 'bg-yellow-100 text-yellow-800 border-yellow-300',
+};
+const STATUS_LABELS: Record<string, string> = {
+  active: 'Активный',
+  completed: 'Завершён',
+  cancelled: 'Недоступен',
+};
+
+const TABS = [
+  { key: 'all', label: 'Все' },
+  { key: 'upcoming', label: 'Предстоящие' },
+  { key: 'past', label: 'Прошедшие' },
+];
+
+const BOOKING_STATUSES = [
+  { value: 'active', label: 'Активно' },
+  { value: 'completed', label: 'Завершено' },
+  { value: 'cancelled', label: 'Отменено' },
+];
+
+interface BookingModalProps {
+  open: boolean;
+  onClose: () => void;
+  onSave: (data: any) => void;
+  guests: Guest[];
+  rooms: Room[];
+  initial?: any;
+}
+
+function BookingModal({ open, onClose, onSave, guests, rooms, initial }: BookingModalProps) {
+  const [form, setForm] = useState({
+    status: initial?.status || 'active',
+    guest_id: initial?.guest?.id || initial?.guest_id || '',
+    room_id: initial?.room?.id || initial?.room_id || '',
+    check_in: initial?.check_in ? initial.check_in.slice(0, 10) : '',
+    check_out: initial?.check_out ? initial.check_out.slice(0, 10) : '',
+    people_count: initial?.people_count || 1,
+    comments: initial?.comments || '',
+  });
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState('');
+  const modalRef = useRef<HTMLDivElement>(null);
+
+  // Добавляем состояние для времени заезда и выезда
+  const [checkInTime, setCheckInTime] = useState(initial ? (initial.check_in ? toZonedTime(new Date(initial.check_in), TIMEZONE).toTimeString().slice(0,5) : '00:00') : '00:00');
+  const [checkOutTime, setCheckOutTime] = useState(initial ? (initial.check_out ? toZonedTime(new Date(initial.check_out), TIMEZONE).toTimeString().slice(0,5) : '00:00') : '00:00');
+
+  // Кастомный time picker (dropdown)
+  const [showCheckInDropdown, setShowCheckInDropdown] = useState(false);
+  const [showCheckOutDropdown, setShowCheckOutDropdown] = useState(false);
+
+  // refs для scrollIntoView выбранного времени
+  const checkInTimeRefs = useRef<{ [key: string]: HTMLDivElement | null }>({});
+  const checkOutTimeRefs = useRef<{ [key: string]: HTMLDivElement | null }>({});
+
+  // Скроллим к выбранному времени при открытии dropdown
+  useEffect(() => {
+    if (showCheckInDropdown && checkInTimeRefs.current[checkInTime]) {
+      checkInTimeRefs.current[checkInTime]?.scrollIntoView({ block: 'center' });
+    }
+  }, [showCheckInDropdown, checkInTime]);
+  useEffect(() => {
+    if (showCheckOutDropdown && checkOutTimeRefs.current[checkOutTime]) {
+      checkOutTimeRefs.current[checkOutTime]?.scrollIntoView({ block: 'center' });
+    }
+  }, [showCheckOutDropdown, checkOutTime]);
+
+  // При открытии модалки для редактирования заполняем все поля из initial
+  useEffect(() => {
+    if (open && initial) {
+      // check_in/check_out приходят в UTC, преобразуем к Asia/Bishkek
+      const checkInDate = initial.check_in ? toZonedTime(new Date(initial.check_in), TIMEZONE) : null;
+      const checkOutDate = initial.check_out ? toZonedTime(new Date(initial.check_out), TIMEZONE) : null;
+      setForm({
+        status: initial.status || 'active',
+        guest_id: initial.guest?.id || initial.guest_id || '',
+        room_id: initial.room?.id || initial.room_id || '',
+        check_in: checkInDate ? formatTz(checkInDate, 'yyyy-MM-dd', { timeZone: TIMEZONE }) : '',
+        check_out: checkOutDate ? formatTz(checkOutDate, 'yyyy-MM-dd', { timeZone: TIMEZONE }) : '',
+        people_count: initial.people_count || 1,
+        comments: initial.comments || '',
+      });
+      setCheckInTime(checkInDate ? formatTz(checkInDate, 'HH:mm', { timeZone: TIMEZONE }) : '00:00');
+      setCheckOutTime(checkOutDate ? formatTz(checkOutDate, 'HH:mm', { timeZone: TIMEZONE }) : '00:00');
+    }
+    if (open && !initial) {
+      setForm({
+        status: 'active',
+        guest_id: '',
+        room_id: '',
+        check_in: '',
+        check_out: '',
+        people_count: 1,
+        comments: '',
+      });
+      setCheckInTime('00:00');
+      setCheckOutTime('00:00');
+    }
+  }, [open, initial]);
+
+  useEffect(() => {
+    if (open && modalRef.current) {
+      modalRef.current.focus();
+    }
+  }, [open]);
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setSaving(true);
+    setError('');
+    try {
+      // Собираем дату и время в формат ISO (YYYY-MM-DDTHH:mm)
+      const check_in = form.check_in && checkInTime
+        ? new Date(toZonedTime(`${form.check_in}T${checkInTime}`, TIMEZONE)).toISOString()
+        : '';
+      const check_out = form.check_out && checkOutTime
+        ? new Date(toZonedTime(`${form.check_out}T${checkOutTime}`, TIMEZONE)).toISOString()
+        : '';
+      let res;
+      if (initial && initial.id) {
+        res = await fetch(`${API_URL}/api/bookings/${initial.id}/`, {
+          method: 'PATCH',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${localStorage.getItem('access')}`,
+          },
+          body: JSON.stringify({
+            status: form.status,
+            guest_id: form.guest_id,
+            room_id: form.room_id,
+            check_in,
+            check_out,
+            people_count: form.people_count,
+            comments: form.comments,
+          }),
+        });
+      } else {
+        res = await fetch(`${API_URL}/api/bookings/`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${localStorage.getItem('access')}`,
+          },
+          body: JSON.stringify({
+            status: form.status,
+            guest_id: form.guest_id,
+            room_id: form.room_id,
+            check_in,
+            check_out,
+            people_count: form.people_count,
+            comments: form.comments,
+          }),
+        });
+      }
+      if (res.ok) {
+        onSave(form); // Для обновления списка
+        onClose();
+      } else {
+        setError('Ошибка при сохранении. Проверьте данные.');
+      }
+    } catch {
+      setError('Ошибка сети.');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  if (!open) return null;
+  // Список времени для выбора (шаг 15 минут)
+  const timeOptions = Array.from({ length: 24 * 4 }, (_, i) => {
+    const h = Math.floor(i / 4).toString().padStart(2, '0');
+    const m = ((i % 4) * 15).toString().padStart(2, '0');
+    return `${h}:${m}`;
+  });
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 backdrop-blur-sm animate-fade-in">
+      <div ref={modalRef} tabIndex={-1} className="bg-white rounded-xl shadow-2xl p-8 w-full max-w-xl relative animate-modal-in border border-gray-100 focus:outline-none">
+        <h2 className="text-xl font-bold mb-6">{initial ? 'Редактировать' : 'Добавить'} бронирование</h2>
+        <button onClick={onClose} className="absolute top-4 right-4 text-gray-400 hover:text-gray-700 text-2xl font-bold focus:outline-none">×</button>
+        <form className="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-4" onSubmit={handleSubmit}>
+          <label className="font-semibold md:text-right md:pr-2 flex items-center">Статус:</label>
+          <select className="input w-full" value={form.status} onChange={e => setForm(f => ({ ...f, status: e.target.value }))}>
+            {BOOKING_STATUSES.map(opt => <option key={opt.value} value={opt.value}>{opt.label}</option>)}
+          </select>
+
+          <label className="font-semibold md:text-right md:pr-2 flex items-center">Гость:</label>
+          <select className="input w-full" value={form.guest_id} onChange={e => setForm(f => ({ ...f, guest_id: e.target.value }))} required>
+            <option value="">Выберите гостя</option>
+            {guests.map(g => <option key={g.id} value={g.id}>{g.full_name}</option>)}
+          </select>
+
+          <label className="font-semibold md:text-right md:pr-2 flex items-center">Количество гостей:</label>
+          <input type="number" min={1} max={10} className="input w-full" value={form.people_count} onChange={e => setForm(f => ({ ...f, people_count: +e.target.value, room_id: '' }))} />
+
+          <label className="font-semibold md:text-right md:pr-2 flex items-center">Номер:</label>
+          <select className="input w-full" value={form.room_id} onChange={e => setForm(f => ({ ...f, room_id: e.target.value }))} required>
+            <option value="">Выберите номер</option>
+            {rooms.filter(r => r.capacity >= form.people_count).map(r => (
+              <option key={r.id} value={r.id}>{r.number} (вместимость: {r.capacity})</option>
+            ))}
+          </select>
+
+          <label className="font-semibold md:text-right md:pr-2 flex items-center">Дата заезда:</label>
+          <div className="flex gap-2 relative">
+            <DatePicker
+              selected={form.check_in && checkInTime ? toZonedTime(new Date(`${form.check_in}T${checkInTime}`), TIMEZONE) : null}
+              onChange={date => {
+                if (date) {
+                  setForm(f => ({ ...f, check_in: formatTz(toZonedTime(date, TIMEZONE), 'yyyy-MM-dd', { timeZone: TIMEZONE }) }));
+                } else {
+                  setForm(f => ({ ...f, check_in: '' }));
+                }
+              }}
+              dateFormat="dd.MM.yyyy"
+              className="input w-36"
+              placeholderText="дд.мм.гг"
+              calendarClassName="shadow-xl"
+              locale={ru}
+              autoComplete="off"
+              onKeyDown={e => e.preventDefault()}
+              customInput={<input className="input w-36" readOnly placeholder="дд.мм.гггг" />}
+            />
+            <div className="relative w-28">
+              <button
+                type="button"
+                className="input w-full text-left"
+                onClick={() => setShowCheckInDropdown(v => !v)}
+              >
+                {checkInTime}
+              </button>
+              {showCheckInDropdown && (
+                <div className="absolute z-50 bg-white border rounded shadow max-h-48 overflow-y-auto mt-1 w-full">
+                  {timeOptions.map(t => (
+                    <div
+                      key={t}
+                      ref={el => { checkInTimeRefs.current[t] = el; }}
+                      className={`px-3 py-2 hover:bg-blue-100 cursor-pointer ${checkInTime === t ? 'bg-blue-50 font-bold' : ''}`}
+                      onClick={() => { setCheckInTime(t); setShowCheckInDropdown(false); }}
+                    >
+                      {t}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+
+          <label className="font-semibold md:text-right md:pr-2 flex items-center">Дата выезда:</label>
+          <div className="flex gap-2 relative">
+            <DatePicker
+              selected={form.check_out && checkOutTime ? toZonedTime(new Date(`${form.check_out}T${checkOutTime}`), TIMEZONE) : null}
+              onChange={date => {
+                if (date) {
+                  setForm(f => ({ ...f, check_out: formatTz(toZonedTime(date, TIMEZONE), 'yyyy-MM-dd', { timeZone: TIMEZONE }) }));
+                } else {
+                  setForm(f => ({ ...f, check_out: '' }));
+                }
+              }}
+              dateFormat="dd.MM.yyyy"
+              className="input w-36"
+              placeholderText="дд.мм.гг"
+              calendarClassName="shadow-xl"
+              locale={ru}
+              autoComplete="off"
+              onKeyDown={e => e.preventDefault()}
+              customInput={<input className="input w-36" readOnly placeholder="дд.мм.гггг" />}
+            />
+            <div className="relative w-28">
+              <button
+                type="button"
+                className="input w-full text-left"
+                onClick={() => setShowCheckOutDropdown(v => !v)}
+              >
+                {checkOutTime}
+              </button>
+              {showCheckOutDropdown && (
+                <div className="absolute z-50 bg-white border rounded shadow max-h-48 overflow-y-auto mt-1 w-full">
+                  {timeOptions.map(t => (
+                    <div
+                      key={t}
+                      ref={el => { checkOutTimeRefs.current[t] = el; }}
+                      className={`px-3 py-2 hover:bg-blue-100 cursor-pointer ${checkOutTime === t ? 'bg-blue-50 font-bold' : ''}`}
+                      onClick={() => { setCheckOutTime(t); setShowCheckOutDropdown(false); }}
+                    >
+                      {t}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+
+          <label className="font-semibold md:text-right md:pr-2 flex items-center">Комментарий:</label>
+          <textarea className="input w-full md:col-span-1" rows={2} value={form.comments} onChange={e => setForm(f => ({ ...f, comments: e.target.value }))} />
+
+          {/* Кнопки */}
+          <div className="md:col-span-2 flex justify-end gap-3 mt-6">
+            <button type="button" onClick={onClose} className="bg-gray-200 hover:bg-gray-300 text-gray-700 px-5 py-2 rounded font-semibold">Отмена</button>
+            <button type="submit" disabled={saving} className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-2 rounded font-semibold shadow disabled:opacity-60 disabled:cursor-not-allowed">{saving ? 'Сохранение...' : 'Сохранить'}</button>
+          </div>
+          {error && <div className="md:col-span-2 text-red-500 text-sm mt-2">{error}</div>}
+        </form>
+      </div>
+    </div>
+  );
+}
+
+// Добавить функцию форматирования даты и времени
+function formatDateTime(dt: string) {
+  if (!dt) return '';
+  const d = toZonedTime(new Date(dt), TIMEZONE);
+  const day = d.getDate().toString().padStart(2, '0');
+  const month = (d.getMonth() + 1).toString().padStart(2, '0');
+  const year = d.getFullYear();
+  const hours = d.getHours().toString().padStart(2, '0');
+  const minutes = d.getMinutes().toString().padStart(2, '0');
+  return `${day}.${month}.${year}, ${hours}:${minutes}`;
+}
+
+// Toast-уведомления
+function Toast({ message, type, onClose }: { message: string, type: 'success' | 'error', onClose: () => void }) {
+  return (
+    <div className={`fixed top-6 right-6 z-[9999] px-6 py-4 rounded-lg shadow-lg text-white font-semibold animate-fade-in ${type === 'success' ? 'bg-green-600' : 'bg-red-600'}`}>{message}
+      <button className="ml-4 text-white/80 hover:text-white text-lg font-bold" onClick={onClose}>×</button>
+    </div>
+  );
+}
+
+function TooltipOnClick({ content, children }: { content: string, children: React.ReactNode }) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    function handleClickOutside(e: MouseEvent) {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+    }
+    if (open) document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [open]);
+  return (
+    <div className="relative inline-block" ref={ref}>
+      <span onClick={e => { e.stopPropagation(); setOpen(o => !o); }} className="cursor-pointer">
+        {children}
+      </span>
+      {open && (
+        <div className="absolute z-50 left-1/2 -translate-x-1/2 mt-2 px-4 py-2 bg-white border rounded shadow text-xs whitespace-pre-line min-w-[120px] max-w-xs">
+          {content}
+        </div>
+      )}
+    </div>
+  );
 }
 
 export default function BookingsPage() {
-  const { t } = useTranslation();
+  const { handleApiRequestWithAuth } = useApi();
+  const [bookings, setBookings] = useState<Booking[]>([]);
+  const [guests, setGuests] = useState<Guest[]>([]);
+  const [rooms, setRooms] = useState<Room[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [activeTab, setActiveTab] = useState('all');
+  const [showAddModal, setShowAddModal] = useState(false);
   const [token, setToken] = useState<string | null>(null);
   const [tokenLoaded, setTokenLoaded] = useState(false);
-  const [bookings, setBookings] = useState<Booking[]>([]);
-  const [rooms, setRooms] = useState<Room[]>([]);
-  const [guests, setGuests] = useState<Guest[]>([]);
-  const [buildings, setBuildings] = useState<any[]>([]);
-  const [roomId, setRoomId] = useState('');
-  const [guestId, setGuestId] = useState('');
-  const [dateFrom, setDateFrom] = useState<Date | null>(null);
-  const [dateTo, setDateTo] = useState<Date | null>(null);
-  const [error, setError] = useState('');
-  const [success, setSuccess] = useState('');
-  const [filterDate, setFilterDate] = useState('');
-  const [searchGuest, setSearchGuest] = useState('');
-  const [loading, setLoading] = useState(true);
-  const [showAddModal, setShowAddModal] = useState(false);
-  const [addForm, setAddForm] = useState({
-    room: '',
-    guest: '',
-    date_from: '',
-    date_to: '',
-    payment_status: 'pending',
-    payment_amount: '',
-    payment_method: 'cash',
-    comments: '',
-  });
-  const [addLoading, setAddLoading] = useState(false);
-  const [addError, setAddError] = useState('');
-  const [addSuccess, setAddSuccess] = useState('');
-  const [peopleCount, setPeopleCount] = useState(1);
-  const [filterBuilding, setFilterBuilding] = useState('');
-  const [currentPage, setCurrentPage] = useState(1);
-  const bookingsPerPage = 10;
-  
-  // Состояние для редактирования
-  const [showEditModal, setShowEditModal] = useState(false);
   const [editBooking, setEditBooking] = useState<Booking | null>(null);
-  const [editForm, setEditForm] = useState({
-    room: '',
-    guest: '',
-    date_from: '',
-    date_to: '',
-    payment_status: 'pending',
-    payment_amount: '',
-    payment_method: 'cash',
-    comments: '',
+  const [deleteBooking, setDeleteBooking] = useState<Booking | null>(null);
+  const [deleting, setDeleting] = useState(false);
+  const [showFilters, setShowFilters] = useState(false);
+  const [filters, setFilters] = useState({
+    status: '',
+    room_id: '',
+    guest_id: '',
+    people_count: '',
   });
-  const [editPeopleCount, setEditPeopleCount] = useState(1);
-  const [editLoading, setEditLoading] = useState(false);
-  const [editError, setEditError] = useState('');
-  const [editSuccess, setEditSuccess] = useState('');
-
-  const searchParams = useSearchParams();
-
-  const [sortState, setSortState] = useState<{ field: string | null; order: 'asc' | 'desc' | null }>({ field: null, order: null });
-
-  const [showConfirmDelete, setShowConfirmDelete] = useState(false);
-  const [selectedDeleteId, setSelectedDeleteId] = useState<number | null>(null);
-
-  const [filterPaymentStatus, setFilterPaymentStatus] = useState('');
-  const [filterPaymentMethod, setFilterPaymentMethod] = useState('');
-  const [filterAmountFrom, setFilterAmountFrom] = useState('');
-  const [filterAmountTo, setFilterAmountTo] = useState('');
-  const [toast, setToast] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
-
-  const handleSort = (field: string) => {
-    setSortState(prev => {
-      if (prev.field !== field) return { field, order: 'asc' };
-      if (prev.order === 'asc') return { field, order: 'desc' };
-      if (prev.order === 'desc') return { field: null, order: null };
-      return { field, order: 'asc' };
-    });
-  };
+  const [toast, setToast] = useState<{ message: string, type: 'success' | 'error' } | null>(null);
+  const toastTimeout = useRef<NodeJS.Timeout | null>(null);
+  const [activeRow, setActiveRow] = useState<number | null>(null);
+  const [view, setView] = useState<'list' | 'table' | 'calendar'>('list');
 
   useEffect(() => {
     if (typeof window !== 'undefined') {
@@ -175,838 +430,318 @@ export default function BookingsPage() {
       window.location.href = '/login';
       return;
     }
+    fetchAll();
+  }, [tokenLoaded, token]);
+
+  const fetchAll = async () => {
     setLoading(true);
-    Promise.all([
-      fetch(`${API_URL}/api/bookings/`, { headers: { Authorization: `Bearer ${token}` } }),
-      fetch(`${API_URL}/api/rooms/`, { headers: { Authorization: `Bearer ${token}` } }),
-      fetch(`${API_URL}/api/guests/`, { headers: { Authorization: `Bearer ${token}` } }),
-      fetch(`${API_URL}/api/buildings/`, { headers: { Authorization: `Bearer ${token}` } }),
-    ])
-      .then(async ([bookingsRes, roomsRes, guestsRes, buildingsRes]) => {
-        const bookingsData = await bookingsRes.json();
-        const roomsData = await roomsRes.json();
-        const guestsData = await guestsRes.json();
-        const buildingsData = await buildingsRes.json();
-        setBookings(bookingsData);
-        setRooms(roomsData);
-        setGuests(guestsData);
-        setBuildings(buildingsData);
+    const [bookingsData, guestsData, roomsData] = await Promise.all([
+      handleApiRequestWithAuth(`${API_URL}/api/bookings/`),
+      handleApiRequestWithAuth(`${API_URL}/api/guests/`),
+      handleApiRequestWithAuth(`${API_URL}/api/rooms/`),
+    ]);
+    setBookings(Array.isArray(bookingsData) ? bookingsData : []);
+    setGuests(Array.isArray(guestsData) ? guestsData : []);
+    setRooms(Array.isArray(roomsData) ? roomsData : []);
         setLoading(false);
-      })
-      .catch(() => {
-        setError('Ошибка загрузки данных');
-        setLoading(false);
-      });
-    if (searchParams.get('add') === '1') {
-      setShowAddModal(true);
-    } else {
-      setShowAddModal(false);
-    }
-  }, [token, tokenLoaded, success, searchParams]);
-
-  const handleAddChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
-    setAddForm({ ...addForm, [e.target.name]: e.target.value });
   };
 
-  const handleAddSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setAddLoading(true);
-    setAddError('');
-    setAddSuccess('');
-    if (!addForm.room || !addForm.guest || !addForm.date_from || !addForm.date_to) {
-      setAddError('Заполните все обязательные поля');
-      setAddLoading(false);
-      return;
-    }
-    try {
-      if (!token) return;
-      const res = await fetch(`${API_URL}/api/bookings/`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify({
-          room_id: Number(addForm.room),
-          guest_id: Number(addForm.guest),
-          check_in: toYMD(addForm.date_from),
-          check_out: toYMD(addForm.date_to),
-          people_count: peopleCount,
-          payment_status: addForm.payment_status,
-          payment_amount: addForm.payment_amount ? parseFloat(addForm.payment_amount) : 0,
-          payment_method: addForm.payment_method,
-          comments: addForm.comments,
-        }),
-      });
-      if (!res.ok) {
-        let data: any = {};
-        try { data = await res.json(); } catch {}
-        const errorMessage = data.detail || (data.non_field_errors && data.non_field_errors[0]) || JSON.stringify(data) || 'Ошибка при создании бронирования';
-        setAddError(errorMessage);
-        showToast('error', errorMessage);
-      } else {
-        setAddSuccess('Бронирование успешно создано');
-        showToast('success', 'Бронирование успешно создано');
-        setShowAddModal(false);
-        setAddForm({ room: '', guest: '', date_from: '', date_to: '', payment_status: 'pending', payment_amount: '', payment_method: 'cash', comments: '' });
-        // Обновить список
-        const bookingsData = await fetch(`${API_URL}/api/bookings/`, { headers: { Authorization: `Bearer ${token}` } });
-        if (bookingsData) {
-          setBookings(await bookingsData.json());
-        }
-      }
-    } catch {
-      const errorMessage = 'Ошибка сети';
-      setAddError(errorMessage);
-      showToast('error', errorMessage);
-    } finally {
-      setAddLoading(false);
-    }
-  };
-
-  const handleDelete = async (bookingId: number) => {
-    setSelectedDeleteId(bookingId);
-    setShowConfirmDelete(true);
-  };
-
-  const confirmDelete = async () => {
-    if (!selectedDeleteId || !token) return;
-    const res = await fetch(`${API_URL}/api/bookings/${selectedDeleteId}/`, {
-      method: 'DELETE',
-      headers: { Authorization: `Bearer ${token}` },
-    });
-    if (res.ok) {
-      setSuccess('Бронирование удалено');
-      showToast('success', 'Бронирование успешно удалено');
-      setBookings(bookings.filter(b => b.id !== selectedDeleteId));
-    } else {
-      showToast('error', 'Ошибка при удалении бронирования');
-    }
-    setShowConfirmDelete(false);
-    setSelectedDeleteId(null);
-  };
-
-  const handleEdit = (bookingId: number) => {
-    const booking = bookings.find(b => b.id === bookingId);
-    if (booking) {
-      setEditBooking(booking);
-      setEditForm({
-        room: booking.room.id.toString(),
-        guest: booking.guest.id.toString(),
-        date_from: booking.date_from || booking.check_in || '',
-        date_to: booking.date_to || booking.check_out || '',
-        payment_status: booking.payment_status || 'pending',
-        payment_amount: booking.payment_amount ? String(booking.payment_amount) : '',
-        payment_method: booking.payment_method || 'cash',
-        comments: booking.comments || '',
-      });
-      setEditPeopleCount(booking.people_count || 1);
-      setShowEditModal(true);
-    }
-  };
-
-  const handleEditChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
-    setEditForm({ ...editForm, [e.target.name]: e.target.value });
-  };
-
-  const handleEditSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setEditLoading(true);
-    setEditError('');
-    setEditSuccess('');
-    if (!editForm.room || !editForm.guest || !editForm.date_from || !editForm.date_to) {
-      setEditError('Заполните все обязательные поля');
-      setEditLoading(false);
-      return;
-    }
-    try {
-      if (!token) return;
-      const res = await fetch(`${API_URL}/api/bookings/${editBooking?.id}/`, {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify({
-          room_id: Number(editForm.room),
-          guest_id: Number(editForm.guest),
-          check_in: toYMD(editForm.date_from),
-          check_out: toYMD(editForm.date_to),
-          people_count: editPeopleCount,
-          payment_status: editForm.payment_status,
-          payment_amount: editForm.payment_amount ? parseFloat(editForm.payment_amount) : 0,
-          payment_method: editForm.payment_method,
-          comments: editForm.comments,
-        }),
-      });
-      if (!res.ok) {
-        let data: any = {};
-        try { data = await res.json(); } catch {}
-        const errorMessage = data.detail || (data.non_field_errors && data.non_field_errors[0]) || JSON.stringify(data) || 'Ошибка при обновлении бронирования';
-        setEditError(errorMessage);
-        showToast('error', errorMessage);
-      } else {
-        setEditSuccess('Бронирование успешно обновлено');
-        showToast('success', 'Бронирование успешно обновлено');
-        setShowEditModal(false);
-        setEditBooking(null);
-        // Обновить список
-        const bookingsData = await fetch(`${API_URL}/api/bookings/`, { headers: { Authorization: `Bearer ${token}` } });
-        if (bookingsData) {
-          setBookings(await bookingsData.json());
-        }
-      }
-    } catch {
-      const errorMessage = 'Ошибка сети';
-      setEditError(errorMessage);
-      showToast('error', errorMessage);
-    } finally {
-      setEditLoading(false);
-    }
-  };
-
-  // Фильтрация и пагинация
-  const filteredBookings = bookings.filter(b => {
-    let matchesDate = true;
-    if (filterDate) {
-      // Используем date_from/date_to или check_in/check_out
-      const from = new Date(b.date_from || b.check_in);
-      const to = new Date(b.date_to || b.check_out);
-      const filter = new Date(filterDate);
-      from.setHours(0,0,0,0);
-      to.setHours(0,0,0,0);
-      filter.setHours(0,0,0,0);
-      matchesDate = filter >= from && filter <= to;
-    }
-    const matchesBuilding = !filterBuilding || (rooms.find(r => r.id === b.room.id)?.building === Number(filterBuilding));
-    const matchesGuest = !searchGuest || b.guest.full_name.toLowerCase().includes(searchGuest.toLowerCase());
-    const matchesPaymentStatus = !filterPaymentStatus || b.payment_status === filterPaymentStatus;
-    const matchesPaymentMethod = !filterPaymentMethod || b.payment_method === filterPaymentMethod;
-    const matchesAmountFrom = !filterAmountFrom || (b.total_amount || 0) >= Number(filterAmountFrom);
-    const matchesAmountTo = !filterAmountTo || (b.total_amount || 0) <= Number(filterAmountTo);
-    
-    return matchesDate && matchesBuilding && matchesGuest && matchesPaymentStatus && matchesPaymentMethod && matchesAmountFrom && matchesAmountTo;
+  // Фильтрация по вкладкам и фильтрам
+  const now = new Date();
+  const filtered = bookings.filter(b => {
+    // Вкладки
+    if (activeTab === 'upcoming' && new Date(b.check_in) <= now) return false;
+    if (activeTab === 'past' && new Date(b.check_out) >= now) return false;
+    // Фильтры
+    if (filters.status && b.status !== filters.status) return false;
+    if (filters.room_id && b.room && String(b.room.id) !== filters.room_id) return false;
+    if (filters.guest_id && b.guest && String(b.guest.id) !== filters.guest_id) return false;
+    if (filters.people_count && String(b.people_count) !== filters.people_count) return false;
+    return true;
   });
 
-  const totalPages = Math.ceil(filteredBookings.length / bookingsPerPage);
-  const paginatedBookings = filteredBookings.slice(
-    (currentPage - 1) * bookingsPerPage,
-    currentPage * bookingsPerPage
-  );
-
-  const sortedBookings = [...paginatedBookings];
-  if (sortState.field && sortState.order) {
-    sortedBookings.sort((a, b) => {
-      let aValue = getFieldValue(a, sortState.field!);
-      let bValue = getFieldValue(b, sortState.field!);
-      if (typeof aValue === 'string') aValue = aValue.toLowerCase();
-      if (typeof bValue === 'string') bValue = bValue.toLowerCase();
-      if (aValue < bValue) return sortState.order === 'asc' ? -1 : 1;
-      if (aValue > bValue) return sortState.order === 'asc' ? 1 : -1;
-      return 0;
-  });
+  // Экспорт для текущего вида
+  function exportToCSV() {
+    if (view === 'calendar') {
+      // Календарь: экспортируем список бронирований за месяц
+      const csvRows = [
+        ['ID', 'Тип номера', 'Номер', 'Заезд', 'Выезд', 'Гость', 'Статус'],
+        ...filtered.map(b => [
+          b.id,
+          typeof b.room.room_class === 'object' ? b.room.room_class.label : b.room.room_class,
+          b.room.number,
+          formatDateTime(b.check_in),
+          formatDateTime(b.check_out),
+          b.guest?.full_name || '',
+          STATUS_LABELS[b.status] || b.status
+        ])
+      ];
+      const csv = csvRows.map(row => row.map(String).map(v => `"${v.replace(/"/g, '""')}"`).join(',')).join('\n');
+      const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+      const link = document.createElement('a');
+      link.href = URL.createObjectURL(blob);
+      link.setAttribute('download', 'bookings-calendar.csv');
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      setToast({ message: 'Экспорт завершён', type: 'success' });
+    } else {
+      // Классическая таблица: экспортируем список бронирований
+      const csvRows = [
+        ['ID', 'Тип номера', 'Номер', 'Заезд', 'Выезд', 'Гость', 'Статус'],
+        ...filtered.map(b => [
+          b.id,
+          typeof b.room.room_class === 'object' ? b.room.room_class.label : b.room.room_class,
+          b.room.number,
+          formatDateTime(b.check_in),
+          formatDateTime(b.check_out),
+          b.guest?.full_name || '',
+          STATUS_LABELS[b.status] || b.status
+        ])
+      ];
+      const csv = csvRows.map(row => row.map(String).map(v => `"${v.replace(/"/g, '""')}"`).join(',')).join('\n');
+      const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+      const link = document.createElement('a');
+      link.href = URL.createObjectURL(blob);
+      link.setAttribute('download', 'bookings-list.csv');
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      setToast({ message: 'Экспорт завершён', type: 'success' });
+    }
   }
 
-  const exportToCSV = () => {
-    const header = 'Комната,Гость,Дата заезда,Дата выезда,Кол-во гостей,Статус оплаты,Сумма оплаты,Способ оплаты,Общая сумма,Комментарии';
-    const rows = filteredBookings.map(b => {
-      const paymentStatus = PAYMENT_STATUSES.find(s => s.value === b.payment_status)?.label || b.payment_status;
-      const paymentMethod = PAYMENT_METHODS.find(m => m.value === b.payment_method)?.label || b.payment_method;
-      return `№${b.room.number} — ${b.room.room_class},${b.guest.full_name},${b.date_from},${b.date_to},${b.people_count},${paymentStatus},${b.payment_amount ? `${Number(b.payment_amount).toLocaleString('ru-RU', {minimumFractionDigits: 2, maximumFractionDigits: 2})} сом` : '-'},${paymentMethod},${b.total_amount || 0},"${b.comments || ''}"`;
-    });
-    const csv = [header, ...rows].join('\n');
-    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
-    saveAs(blob, 'bookings.csv');
-  };
-
-  const getOccupancyReport = () => {
-    if (!filterDate) return null;
-    const total = rooms.length;
-    const occupied = bookings.filter(b => b.date_from <= filterDate && b.date_to >= filterDate).length;
-    return `На ${filterDate}: занято ${occupied} из ${total} номеров (${Math.round((occupied/total)*100)}%)`;
-  };
-
-  // Получаем массив занятых дат для выбранной комнаты
-  const getDisabledDates = (roomId: string) => {
-    if (!roomId) return [];
-    const busy = bookings.filter(b => String(b.room.id) === String(roomId));
-    let dates: Date[] = [];
-    busy.forEach(b => {
-      const from = new Date(b.date_from);
-      const to = new Date(b.date_to);
-      for (let d = new Date(from); d <= to; d.setDate(d.getDate() + 1)) {
-        dates.push(new Date(d));
-      }
-    });
-    return dates;
-  };
-
-  const getAvailableRooms = () => {
-    return rooms.filter(room => {
-      if (room.capacity < peopleCount) return false;
-      const overlaps = bookings.some(b =>
-        b.room.id === room.id &&
-        (
-          (addForm.date_from && addForm.date_to) &&
-          (
-            (addForm.date_from >= b.date_from && addForm.date_from <= b.date_to) ||
-            (addForm.date_to >= b.date_from && addForm.date_to <= b.date_to) ||
-            (addForm.date_from <= b.date_from && addForm.date_to >= b.date_to)
-          )
-        )
-      );
-      return !overlaps;
-    });
-  };
-
-  const showToast = (type: 'success' | 'error', message: string) => {
-    setToast({ type, message });
-    setTimeout(() => setToast(null), 3000);
-  };
-
-  const getBookingStatistics = () => {
-    const total = filteredBookings.length;
-    const paid = filteredBookings.filter(b => b.payment_status === 'paid').length;
-    const pending = filteredBookings.filter(b => b.payment_status === 'pending').length;
-    const partial = filteredBookings.filter(b => b.payment_status === 'partial').length;
-    const totalAmount = filteredBookings.reduce((sum, b) => sum + Number(b.total_amount || 0), 0);
-    // Оплаченная сумма — сумма payment_amount для всех paid и partial
-    const paidAmount = filteredBookings
-      .filter(b => b.payment_status === 'paid' || b.payment_status === 'partial')
-      .reduce((sum, b) => sum + Number(b.payment_amount || 0), 0);
-    // Процент оплаты — отношение оплаченной суммы к общей сумме (только если общая сумма > 0)
-    const amountPercentage = totalAmount > 0 ? Math.round((paidAmount / totalAmount) * 100) : 0;
-    return {
-      total,
-      paid,
-      pending,
-      partial,
-      totalAmount,
-      paidAmount,
-      paidPercentage: total > 0 ? Math.round((paid / total) * 100) : 0,
-      amountPercentage,
-    };
-  };
-
-  const handlePaymentStatusChange = async (bookingId: number, newStatus: string) => {
-    if (!token) return;
-    try {
-      const res = await fetch(`${API_URL}/api/bookings/${bookingId}/`, {
-        method: 'PATCH',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify({
-          payment_status: newStatus,
-        }),
-      });
-      if (res.ok) {
-        showToast('success', 'Статус оплаты обновлён');
-        // Обновить список
-        const bookingsData = await fetch(`${API_URL}/api/bookings/`, { headers: { Authorization: `Bearer ${token}` } });
-        if (bookingsData) {
-          setBookings(await bookingsData.json());
-        }
-      } else {
-        showToast('error', 'Ошибка при обновлении статуса');
-      }
-    } catch {
-      showToast('error', 'Ошибка сети');
+  // Клик по гостю
+  function handleGuestClick(guest: any) {
+    if (guest && guest.id) {
+      window.location.href = `/guests?guestId=${guest.id}`;
     }
-  };
+  }
+  function handleRoomClick(room: any) {
+    alert(`Профиль номера: №${room.number}`);
+  }
+
+  // Валидация формы бронирования (минимальная)
+  function validateBookingForm(form: any) {
+    if (!form.guest_id) return 'Гость обязателен';
+    if (!form.room_id) return 'Номер обязателен';
+    if (!form.check_in) return 'Дата заезда обязательна';
+    if (!form.check_out) return 'Дата выезда обязательна';
+    if (!form.people_count || form.people_count < 1) return 'Количество гостей обязательно';
+    return null;
+  }
+
+  // Фильтры: закрытие по клику вне
+  const filterPanelRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    function handleClickOutside(e: MouseEvent) {
+      if (showFilters && filterPanelRef.current && !filterPanelRef.current.contains(e.target as Node)) {
+        setShowFilters(false);
+      }
+    }
+    if (showFilters) {
+      document.addEventListener('mousedown', handleClickOutside);
+      } else {
+      document.removeEventListener('mousedown', handleClickOutside);
+    }
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [showFilters]);
 
   return (
-    <div className="p-8">
-      <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 mb-6">
-        <h1 className="text-2xl font-bold">{t('Бронирование номеров')}</h1>
-        <div className="flex gap-2 flex-wrap items-center bg-white rounded-lg shadow px-4 py-2">
-          <input
-            type="date"
-            value={filterDate}
-            onChange={e => setFilterDate(e.target.value)}
-            className="input w-40"
-            placeholder="Фильтр по дате"
-          />
-          <select value={filterBuilding} onChange={e => setFilterBuilding(e.target.value)} className="input w-40">
-            <option value="">Все корпуса</option>
-            {buildings.map(b => <option key={b.id} value={b.id}>{b.name}</option>)}
-          </select>
-          <select value={filterPaymentStatus} onChange={e => setFilterPaymentStatus(e.target.value)} className="input w-40">
-            <option value="">Все статусы оплаты</option>
-            {PAYMENT_STATUSES.map(status => (
-              <option key={status.value} value={status.value}>{status.label}</option>
-            ))}
-          </select>
-          <select value={filterPaymentMethod} onChange={e => setFilterPaymentMethod(e.target.value)} className="input w-40">
-            <option value="">Все способы оплаты</option>
-            {PAYMENT_METHODS.map(method => (
-              <option key={method.value} value={method.value}>{method.label}</option>
-            ))}
-          </select>
-          <input
-            type="number"
-            placeholder="Сумма от"
-            value={filterAmountFrom}
-            onChange={e => setFilterAmountFrom(e.target.value)}
-            className="input w-24"
-          />
-          <input
-            type="number"
-            placeholder="до"
-            value={filterAmountTo}
-            onChange={e => setFilterAmountTo(e.target.value)}
-            className="input w-24"
-          />
-          <input
-            type="text"
-            placeholder="Поиск по гостю"
-            value={searchGuest}
-            onChange={e => setSearchGuest(e.target.value)}
-            className="input w-48"
-          />
-          <button
-            onClick={exportToCSV}
-            className="flex items-center gap-2 bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded shadow transition-all duration-200 h-11 min-w-[170px] text-base font-normal"
-          >
-            <FaFileCsv /> Экспорт в CSV
-          </button>
-          <button
-            onClick={() => setShowAddModal(true)}
-            className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded shadow transition-all duration-200 h-11 min-w-[170px] text-base font-normal ml-2"
-          >
-            <FaPlus /> Добавить бронирование
-          </button>
-        </div>
-      </div>
-      {/* Статистика бронирований */}
-      {(() => {
-        const stats = getBookingStatistics();
-        return (
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
-            <div className="bg-white rounded-lg shadow p-4 relative">
-              <div className="flex items-center gap-2">
-                <FaChartBar className="text-blue-600" />
-                <span className="font-semibold">Всего бронирований</span>
-                <span className="ml-1 relative inline-block">
-                  <span className="group inline-block">
-                    <FaQuestionCircle className="text-gray-400 cursor-pointer" />
-                    <div className="absolute left-6 top-0 z-10 max-w-xs p-2 bg-gray-800 text-white text-xs rounded shadow-lg opacity-0 pointer-events-none group-hover:opacity-100 group-hover:pointer-events-auto transition-opacity whitespace-normal">
-                      Показывает общее количество бронирований за выбранный период.
-                    </div>
-                  </span>
-                </span>
-              </div>
-              <div className="text-2xl font-bold text-blue-600">{stats.total}</div>
+    <div className="bg-[#f7f8fa] p-0 flex flex-col w-full">
+      {/* Верхняя панель */}
+      <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 mb-6 px-8 pt-8">
+        <div className="flex items-center gap-4">
+          <h1 className="text-2xl font-bold">Бронирования</h1>
             </div>
-            <div className="bg-white rounded-lg shadow p-4 relative">
-              <div className="flex items-center gap-2">
-                <FaCheckCircle className="text-green-600" />
-                <span className="font-semibold">Оплачено</span>
-                <span className="ml-1 relative inline-block">
-                  <span className="group inline-block">
-                    <FaQuestionCircle className="text-gray-400 cursor-pointer" />
-                    <div className="absolute left-6 top-0 z-10 max-w-xs p-2 bg-gray-800 text-white text-xs rounded shadow-lg opacity-0 pointer-events-none group-hover:opacity-100 group-hover:pointer-events-auto transition-opacity whitespace-normal">
-                      Количество бронирований, у которых статус оплаты "Оплачено".
-                    </div>
-                  </span>
-                </span>
-              </div>
-              <div className="text-2xl font-bold text-green-600">{stats.paid} ({stats.paidPercentage}%)</div>
-            </div>
-            <div className="bg-white rounded-lg shadow p-4 relative">
-              <div className="flex items-center gap-2">
-                <FaMoneyBillWave className="text-yellow-600" />
-                <span className="font-semibold">Общая сумма</span>
-                <span className="ml-1 relative inline-block">
-                  <span className="group inline-block">
-                    <FaQuestionCircle className="text-gray-400 cursor-pointer" />
-                    <div className="absolute left-6 top-0 z-10 max-w-xs p-2 bg-gray-800 text-white text-xs rounded shadow-lg opacity-0 pointer-events-none group-hover:opacity-100 group-hover:pointer-events-auto transition-opacity whitespace-normal">
-                      Сумма всех бронирований (поле "Общая сумма" по всем бронированиям).
-                    </div>
-                  </span>
-                </span>
-              </div>
-              <div className="text-2xl font-bold text-yellow-600">{Number(stats.totalAmount || 0).toLocaleString('ru-RU', { maximumFractionDigits: 0 })} сом</div>
-            </div>
-            <div className="bg-white rounded-lg shadow p-4 relative">
-              <div className="flex items-center gap-2">
-                <FaCreditCard className="text-purple-600" />
-                <span className="font-semibold">Оплачено</span>
-                <span className="ml-1 relative inline-block">
-                  <span className="group inline-block">
-                    <FaQuestionCircle className="text-gray-400 cursor-pointer" />
-                    <div className="absolute left-6 top-0 z-10 max-w-xs p-2 bg-gray-800 text-white text-xs rounded shadow-lg opacity-0 pointer-events-none group-hover:opacity-100 group-hover:pointer-events-auto transition-opacity whitespace-normal">
-                      Сумма реально оплаченных денег по всем бронированиям (по полю "Сумма оплаты" у оплаченных и частично оплаченных).
-                    </div>
-                  </span>
-                </span>
-              </div>
-              <div className="text-2xl font-bold text-purple-600">{Number(stats.paidAmount || 0).toLocaleString('ru-RU', { maximumFractionDigits: 0 })} сом</div>
+            <div className="flex gap-2 flex-wrap items-center">
+          <button className="bg-white border border-gray-200 hover:bg-gray-100 text-gray-700 px-4 py-2 rounded-lg font-semibold shadow flex items-center gap-2"
+            onClick={() => setShowFilters(true)}>
+            <FaFilter /> Фильтры
+              </button>
+          <button className="bg-white border border-gray-200 hover:bg-gray-100 text-gray-700 px-4 py-2 rounded-lg font-semibold shadow flex items-center gap-2"
+            onClick={exportToCSV}>
+                <FaFileCsv /> Экспорт
+              </button>
+          <button className={`px-4 py-2 rounded-lg font-semibold shadow flex items-center gap-2 ${view === 'list' ? 'bg-blue-600 text-white' : 'bg-white text-gray-700 border border-gray-200'}`}
+            onClick={() => setView('list')}>
+            <FaList /> Лист
+              </button>
+          <button className={`px-4 py-2 rounded-lg font-semibold shadow flex items-center gap-2 ${view === 'table' ? 'bg-blue-600 text-white' : 'bg-white text-gray-700 border border-gray-200'}`}
+            onClick={() => setView('table')}>
+            <FaStream /> Таблица
+              </button>
+          <button className={`px-4 py-2 rounded-lg font-semibold shadow flex items-center gap-2 ${view === 'calendar' ? 'bg-blue-600 text-white' : 'bg-white text-gray-700 border border-gray-200'}`}
+            onClick={() => setView('calendar')}>
+            <FaCalendarAlt /> Календарь
+              </button>
             </div>
           </div>
-        );
-      })()}
-      {showAddModal && (
-        <div className="fixed inset-0 z-40 flex items-center justify-center bg-[#1a1a1a]/60 backdrop-blur-sm animate-fade-in">
-          <div className="bg-white rounded-2xl shadow-2xl p-0 w-full max-w-xl relative animate-modal-in border border-gray-100">
-            <div className="flex flex-col items-center pt-8 pb-2 px-8">
-              <h2 className="text-2xl font-bold mb-6 flex items-center gap-2"><FaCalendarCheck className="text-blue-600" />Добавить бронирование</h2>
-              <button
-                onClick={() => setShowAddModal(false)}
-                className="absolute top-4 right-4 text-gray-400 hover:text-gray-700 text-2xl font-bold focus:outline-none"
-                aria-label="Закрыть"
-              >×</button>
-              <form onSubmit={handleAddSubmit} className="w-full grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div className="flex flex-col gap-1">
-                  <label className="font-semibold text-sm">Гость</label>
-                  <select name="guest" value={addForm.guest} onChange={handleAddChange} className="input w-full h-11" required>
-                    <option value="">Выберите гостя</option>
-                    {guests.map(guest => (
-                      <option key={guest.id} value={guest.id}>{guest.full_name}</option>
-                    ))}
-                  </select>
-                </div>
-                <div className="flex flex-col gap-1">
-                  <label className="font-semibold text-sm">Количество гостей</label>
-                  <input
-                    type="number"
-                    min={1}
-                    max={10}
-                    value={peopleCount}
-                    onChange={e => setPeopleCount(Number(e.target.value))}
-                    className="input w-full h-11"
-                    required
-                  />
-                </div>
-                <div className="flex flex-col gap-1 md:col-span-2">
-                  <label className="font-semibold text-sm">Комната</label>
-                  <select name="room" value={addForm.room} onChange={handleAddChange} className="input w-full h-11" required>
-                    <option value="">Выберите комнату</option>
-                    {getAvailableRooms().map(room => (
-                      <option key={room.id} value={room.id}>
-                        Номер: {room.number} — Вместимость: {room.capacity}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-                <div className="flex flex-col gap-1">
-                  <label className="font-semibold text-sm">Дата заезда</label>
-                  <DatePickerClient
-                    selected={addForm.date_from ? new Date(addForm.date_from) : null}
-                    onChange={(date: Date | null) => setAddForm(f => ({ ...f, date_from: date ? date.toISOString() : '' }))}
-                    className="input w-full h-11"
-                    dateFormat="HH:mm dd.MM.yyyy"
-                    timeFormat="HH:mm"
-                    showTimeSelect
-                    timeIntervals={15}
-                    excludeDates={getDisabledDates(addForm.room)}
-                    required
-                  />
-                </div>
-                <div className="flex flex-col gap-1">
-                  <label className="font-semibold text-sm">Дата выезда</label>
-                  <DatePickerClient
-                    selected={addForm.date_to ? new Date(addForm.date_to) : null}
-                    onChange={(date: Date | null) => setAddForm(f => ({ ...f, date_to: date ? date.toISOString() : '' }))}
-                    className="input w-full h-11"
-                    dateFormat="HH:mm dd.MM.yyyy"
-                    timeFormat="HH:mm"
-                    showTimeSelect
-                    timeIntervals={15}
-                    excludeDates={getDisabledDates(addForm.room)}
-                    required
-                  />
-                </div>
-                <div className="flex flex-col gap-1">
-                  <label className="font-semibold text-sm">Статус оплаты</label>
-                  <select name="payment_status" value={addForm.payment_status} onChange={handleAddChange} className="input w-full h-11">
-                    {PAYMENT_STATUSES.map(status => (
-                      <option key={status.value} value={status.value}>{status.label}</option>
-                    ))}
-                  </select>
-                </div>
-                <div className="flex flex-col gap-1">
-                  <label className="font-semibold text-sm">Сумма оплаты (сом)</label>
-                  <input
-                    type="number"
-                    name="payment_amount"
-                    value={addForm.payment_amount}
-                    onChange={handleAddChange}
-                    className="input w-full h-11"
-                    min="0"
-                    step="0.01"
-                  />
-                </div>
-                <div className="flex flex-col gap-1">
-                  <label className="font-semibold text-sm">Способ оплаты</label>
-                  <select name="payment_method" value={addForm.payment_method} onChange={handleAddChange} className="input w-full h-11">
-                    {PAYMENT_METHODS.map(method => (
-                      <option key={method.value} value={method.value}>{method.label}</option>
-                    ))}
-                  </select>
-                </div>
-                <div className="flex flex-col gap-1 md:col-span-2">
-                  <label className="font-semibold text-sm">Комментарии</label>
-                  <textarea
-                    name="comments"
-                    value={addForm.comments}
-                    onChange={handleAddChange}
-                    className="input w-full h-11"
-                    rows={3}
-                    placeholder="Дополнительная информация..."
-                  />
-                </div>
-                <div className="md:col-span-2 flex justify-end mt-4">
+      {/* Вкладки и кнопка Добавить */}
+      <div className="flex gap-2 mb-4 px-8 items-center justify-between">
+        <div className="flex gap-2 items-center">
+          {TABS.map(tab => (
                   <button
-                    type="submit"
-                    disabled={addLoading}
-                    className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white px-6 py-2 rounded shadow transition-all duration-200 disabled:opacity-60 disabled:cursor-not-allowed"
-                  >
-                    <FaPlus /> {addLoading ? 'Добавление...' : 'Добавить'}
-                  </button>
-                </div>
-                {addError && <div className="text-red-500 md:col-span-2">{addError}</div>}
-                {addSuccess && <div className="text-green-600 md:col-span-2">Бронирование успешно создано!</div>}
-              </form>
-            </div>
-          </div>
-        </div>
-      )}
-      <div className="overflow-x-auto rounded-lg shadow max-w-full">
-        <table className="w-full bg-white rounded-lg text-sm">
-          <thead>
-            <tr className="bg-gray-50 text-gray-700">
-              <th className="p-1">Комн.</th>
-              <th className="p-1">Гость</th>
-              <th className="p-1">Тел.</th>
-              <th className="p-1">Заезд</th>
-              <th className="p-1">Выезд</th>
-              <th className="p-1">Оплата</th>
-              <th className="p-1">Действия</th>
-            </tr>
-          </thead>
-          <tbody>
-            {sortedBookings.map(b => {
-              return (
-                <tr key={b.id} className="hover:bg-blue-50 transition-all">
-                  <td className="p-1">№{b.room.number}</td>
-                  <td className="p-1 truncate max-w-[90px]" title={b.guest.full_name}>{b.guest.full_name}</td>
-                  <td className="p-1">{b.guest.phone || '-'}</td>
-                  <td className="p-1">{formatDate(b.date_from || b.check_in)}</td>
-                  <td className="p-1">{formatDate(b.date_to || b.check_out)}</td>
-                  <td className="p-1">
-                    <select
-                      value={b.payment_status || 'pending'}
-                      onChange={(e) => handlePaymentStatusChange(b.id, e.target.value)}
-                      className={`text-xs px-2 py-1 rounded-full font-semibold border-0 ${PAYMENT_STATUSES.find(s => s.value === b.payment_status)?.color || 'bg-gray-200 text-gray-800'}`}
-                    >
-                      {PAYMENT_STATUSES.map(status => (
-                        <option key={status.value} value={status.value}>{status.label}</option>
-                      ))}
-                    </select>
-                  </td>
-                  <td className="p-1">
-                    <div className="flex gap-2">
-                      <button 
-                        onClick={() => handleEdit(b.id)} 
-                        className="text-blue-600 hover:text-blue-800"
-                        title="Редактировать"
+              key={tab.key}
+              className={`px-4 py-2 rounded-lg font-semibold border shadow-sm ${activeTab === tab.key ? 'bg-blue-600 text-white' : 'bg-white text-gray-700 border-gray-200'}`}
+              onClick={() => setActiveTab(tab.key)}
+            >
+              {tab.label}
+            </button>
+          ))}
+                    </div>
+                      <button
+          className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg font-semibold shadow flex items-center gap-2"
+          onClick={() => setShowAddModal(true)}
                       >
-                        <FaEdit />
-                      </button>
-                      <button 
-                        onClick={() => handleDelete(b.id)} 
-                        className="text-red-600 hover:text-red-800"
-                        title="Удалить"
-                      >
-                        <FaTrash />
+          <FaPlus /> Добавить
                       </button>
                     </div>
-                  </td>
+      {/* Основной контент: таймлайн или календарь */}
+      <div className="w-full px-4 mb-8">
+        {view === 'list' ? (
+          // Компактная таблица (лист) прямо здесь
+          <div className="rounded-lg shadow bg-white w-full">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="bg-gray-50 text-gray-700">
+                  <th className="p-3 text-left">ID</th>
+                  <th className="p-3 text-left">Тип номера</th>
+                  <th className="p-3 text-left">Номер</th>
+                  <th className="p-3 text-left">Заезд</th>
+                  <th className="p-3 text-left">Выезд</th>
+                  <th className="p-3 text-left">Гость</th>
+                  <th className="p-3 text-left">Статус</th>
+                  <th className="p-3 text-left">Действия</th>
                 </tr>
-              );
-            })}
-          </tbody>
-        </table>
-      </div>
-      
-      {/* Пагинация */}
-      {totalPages > 1 && (
-        <div className="flex justify-center items-center gap-2 mt-4">
-          <button
-            className="px-3 py-1 rounded bg-gray-100 hover:bg-gray-200 text-gray-700 disabled:opacity-50"
-            onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
-            disabled={currentPage === 1}
-          >
-            Назад
-          </button>
-          <span className="text-sm text-gray-500">Страница {currentPage} из {totalPages}</span>
-          <button
-            className="px-3 py-1 rounded bg-gray-100 hover:bg-gray-200 text-gray-700 disabled:opacity-50"
-            onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
-            disabled={currentPage === totalPages}
-          >
-            Вперёд
-          </button>
-        </div>
+              </thead>
+              <tbody>
+                {loading ? (
+                  <tr><td colSpan={8} className="text-center text-gray-400 py-8">Загрузка...</td></tr>
+                ) : filtered.length === 0 ? (
+                  <tr><td colSpan={8} className="text-center text-gray-400 py-8">Нет бронирований</td></tr>
+                ) : (
+                  filtered.map((b, idx) => (
+                    <tr key={b.id} className={`transition-all border-b last:border-b-0 ${idx % 2 === 1 ? 'bg-gray-50' : 'bg-white'} hover:bg-blue-50`} onClick={() => setActiveRow(b.id)}>
+                      <td className="p-3 font-mono text-xs text-gray-500 min-w-0 truncate">{idx + 1}</td>
+                      <td className="p-3 min-w-0 truncate">{typeof b.room.room_class === 'object' ? b.room.room_class.label : b.room.room_class}</td>
+                      <td className="p-3 min-w-0 truncate">{b.room.number}</td>
+                      <td className="p-3 min-w-0 truncate">{formatDateTime(b.check_in)}</td>
+                      <td className="p-3 min-w-0 truncate">{formatDateTime(b.check_out)}</td>
+                      <td className="p-3 min-w-0 truncate">{b.guest?.full_name || '—'}</td>
+                      <td className="p-3 min-w-0 truncate">{STATUS_LABELS[b.status] || b.status}</td>
+                      <td className="p-3 min-w-0 truncate">
+                        <div className="flex gap-2">
+                          <button onClick={e => { e.stopPropagation(); setEditBooking(b); }} className="bg-blue-100 hover:bg-blue-200 text-blue-700 px-3 py-1 rounded font-semibold flex items-center gap-1 text-xs">Ред.</button>
+                          <button onClick={e => { e.stopPropagation(); setDeleteBooking(b); }} className="bg-red-100 hover:bg-red-200 text-red-700 px-3 py-1 rounded font-semibold flex items-center gap-1 text-xs">Удалить</button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+          </div>
+        ) : view === 'table' ? (
+          <BookingTable bookings={filtered} rooms={rooms} startDate={new Date(now.getFullYear(), now.getMonth(), 1)} endDate={new Date(now.getFullYear(), now.getMonth() + 1, 0)} />
+        ) : (
+          <BookingCalendar bookings={filtered} year={now.getFullYear()} month={now.getMonth()} />
+        )}
+                            </div>
+      {/* Модалка добавления */}
+      {showAddModal && (
+        <BookingModal
+          open={showAddModal}
+          onClose={() => setShowAddModal(false)}
+          onSave={async () => { await fetchAll(); }}
+          guests={guests}
+          rooms={rooms}
+        />
       )}
-      
-      {getOccupancyReport() && (
-        <div className="mt-4 text-sm text-gray-600 bg-blue-50 rounded-lg px-4 py-2 shadow-inner">
-          {getOccupancyReport()}
-        </div>
+      {/* Модалка редактирования */}
+      {editBooking && (
+        <BookingModal
+          open={!!editBooking}
+          onClose={() => setEditBooking(null)}
+          onSave={async () => { setEditBooking(null); await fetchAll(); }}
+          guests={guests}
+          rooms={rooms}
+          initial={editBooking}
+        />
       )}
-      
-      {/* Модальное окно редактирования */}
-      {showEditModal && editBooking && (
-        <div className="fixed inset-0 z-40 flex items-center justify-center bg-[#1a1a1a]/60 backdrop-blur-sm animate-fade-in">
-          <div className="bg-white rounded-2xl shadow-2xl p-0 w-full max-w-xl relative animate-modal-in border border-gray-100">
-            <div className="flex flex-col items-center pt-8 pb-2 px-8">
-              <h2 className="text-2xl font-bold mb-6 flex items-center gap-2"><FaEdit className="text-blue-600" />Редактировать бронирование</h2>
+      {/* Модалка подтверждения удаления */}
+      {deleteBooking && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 backdrop-blur-sm">
+          <div className="bg-white rounded-xl shadow-2xl p-8 w-full max-w-sm relative border border-gray-100">
+            <h2 className="text-xl font-bold mb-4">Удалить бронирование?</h2>
+            <p className="mb-6 text-gray-600">Вы уверены, что хотите удалить бронирование <b>№{deleteBooking.id}</b>?</p>
+            <div className="flex justify-end gap-3">
+              <button onClick={() => setDeleteBooking(null)} className="bg-gray-200 hover:bg-gray-300 text-gray-700 px-5 py-2 rounded font-semibold">Отмена</button>
               <button
-                onClick={() => setShowEditModal(false)}
-                className="absolute top-4 right-4 text-gray-400 hover:text-gray-700 text-2xl font-bold focus:outline-none"
-                aria-label="Закрыть"
-              >×</button>
-              <form onSubmit={handleEditSubmit} className="w-full grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div className="flex flex-col gap-1">
-                  <label className="font-semibold text-sm">Гость</label>
-                  <select name="guest" value={editForm.guest} onChange={handleEditChange} className="input w-full h-11" required>
-                    <option value="">Выберите гостя</option>
-                    {guests.map(guest => (
-                      <option key={guest.id} value={guest.id}>{guest.full_name}</option>
-                    ))}
-                  </select>
-                </div>
-                <div className="flex flex-col gap-1">
-                  <label className="font-semibold text-sm">Количество гостей</label>
-                  <input
-                    type="number"
-                    min={1}
-                    max={10}
-                    value={editPeopleCount}
-                    onChange={e => setEditPeopleCount(Number(e.target.value))}
-                    className="input w-full h-11"
-                    required
-                  />
-                </div>
-                <div className="flex flex-col gap-1 md:col-span-2">
-                  <label className="font-semibold text-sm">Комната</label>
-                  <select name="room" value={editForm.room} onChange={handleEditChange} className="input w-full h-11" required>
-                    <option value="">Выберите комнату</option>
-                    {rooms.map(room => (
-                      <option key={room.id} value={room.id}>
-                        Номер: {room.number} — Вместимость: {room.capacity}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-                <div className="flex flex-col gap-1">
-                  <label className="font-semibold text-sm">Дата заезда</label>
-                  <DatePickerClient
-                    selected={editForm.date_from ? new Date(editForm.date_from) : null}
-                    onChange={(date: Date | null) => setEditForm(f => ({ ...f, date_from: date ? date.toISOString() : '' }))}
-                    className="input w-full h-11"
-                    dateFormat="HH:mm dd.MM.yyyy"
-                    timeFormat="HH:mm"
-                    showTimeSelect
-                    timeIntervals={15}
-                    required
-                  />
-                </div>
-                <div className="flex flex-col gap-1">
-                  <label className="font-semibold text-sm">Дата выезда</label>
-                  <DatePickerClient
-                    selected={editForm.date_to ? new Date(editForm.date_to) : null}
-                    onChange={(date: Date | null) => setEditForm(f => ({ ...f, date_to: date ? date.toISOString() : '' }))}
-                    className="input w-full h-11"
-                    dateFormat="HH:mm dd.MM.yyyy"
-                    timeFormat="HH:mm"
-                    showTimeSelect
-                    timeIntervals={15}
-                    required
-                  />
-                </div>
-                <div className="flex flex-col gap-1">
-                  <label className="font-semibold text-sm">Статус оплаты</label>
-                  <select name="payment_status" value={editForm.payment_status} onChange={handleEditChange} className="input w-full h-11">
-                    {PAYMENT_STATUSES.map(status => (
-                      <option key={status.value} value={status.value}>{status.label}</option>
-                    ))}
-                  </select>
-                </div>
-                <div className="flex flex-col gap-1">
-                  <label className="font-semibold text-sm">Сумма оплаты (сом)</label>
-                  <input
-                    type="number"
-                    name="payment_amount"
-                    value={editForm.payment_amount}
-                    onChange={handleEditChange}
-                    className="input w-full h-11"
-                    min="0"
-                    step="0.01"
-                  />
-                </div>
-                <div className="flex flex-col gap-1">
-                  <label className="font-semibold text-sm">Способ оплаты</label>
-                  <select name="payment_method" value={editForm.payment_method} onChange={handleEditChange} className="input w-full h-11">
-                    {PAYMENT_METHODS.map(method => (
-                      <option key={method.value} value={method.value}>{method.label}</option>
-                    ))}
-                  </select>
-                </div>
-                <div className="flex flex-col gap-1 md:col-span-2">
-                  <label className="font-semibold text-sm">Комментарии</label>
-                  <textarea
-                    name="comments"
-                    value={editForm.comments}
-                    onChange={handleEditChange}
-                    className="input w-full h-11"
-                    rows={3}
-                    placeholder="Дополнительная информация..."
-                  />
-                </div>
-                <div className="md:col-span-2 flex justify-end mt-4">
-                  <button
-                    type="submit"
-                    disabled={editLoading}
-                    className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white px-6 py-2 rounded shadow transition-all duration-200 disabled:opacity-60 disabled:cursor-not-allowed"
-                  >
-                    <FaEdit /> {editLoading ? 'Сохранение...' : 'Сохранить'}
-                  </button>
-                </div>
-                {editError && <div className="text-red-500 md:col-span-2">{editError}</div>}
-                {editSuccess && <div className="text-green-600 md:col-span-2">{editSuccess}</div>}
-              </form>
+                onClick={async () => {
+                  setDeleting(true);
+                  await fetch(`${API_URL}/api/bookings/${deleteBooking.id}/`, {
+                    method: 'DELETE',
+                    headers: { 'Authorization': `Bearer ${localStorage.getItem('access')}` },
+                  });
+                  setDeleting(false);
+                  setDeleteBooking(null);
+                  await fetchAll();
+                }}
+                disabled={deleting}
+                className="bg-red-600 hover:bg-red-700 text-white px-6 py-2 rounded font-semibold shadow disabled:opacity-60 disabled:cursor-not-allowed"
+              >{deleting ? 'Удаление...' : 'Удалить'}</button>
             </div>
           </div>
-        </div>
-      )}
-      <ConfirmModal
-        open={showConfirmDelete}
-        title="Удалить бронирование?"
-        description="Вы действительно хотите удалить это бронирование? Это действие необратимо."
-        confirmText="Удалить"
-        cancelText="Отмена"
-        onConfirm={confirmDelete}
-        onCancel={() => { setShowConfirmDelete(false); setSelectedDeleteId(null); }}
-      />
-      {/* Toast уведомления */}
-      {toast && (
-        <div className={`fixed top-4 right-4 z-50 p-4 rounded-lg shadow-lg animate-fade-in ${
-          toast.type === 'success' ? 'bg-green-500 text-white' : 'bg-red-500 text-white'
-        }`}>
-          <div className="flex items-center gap-2">
-            {toast.type === 'success' ? (
-              <FaCheckCircle className="text-white" />
-            ) : (
-              <FaTimesCircle className="text-white" />
-            )}
-            <span>{toast.message}</span>
-          </div>
-        </div>
-      )}
+            </div>
+          )}
+      {/* Выдвижная панель фильтров */}
+      <div className={`fixed top-0 right-0 h-full w-full max-w-xs bg-white shadow-2xl z-50 transition-transform duration-300 ${showFilters ? 'translate-x-0' : 'translate-x-full'}`} style={{minWidth: 320}} ref={filterPanelRef}>
+        <div className="flex items-center justify-between p-4 border-b">
+          <h2 className="text-xl font-bold">Фильтры</h2>
+          <button onClick={() => setShowFilters(false)} className="text-gray-400 hover:text-gray-700 text-2xl font-bold focus:outline-none">×</button>
+                    </div>
+        <div className="p-4 flex flex-col gap-4">
+          <label className="font-semibold">Статус</label>
+          <select className="input w-full" value={filters.status} onChange={e => setFilters(f => ({ ...f, status: e.target.value }))}>
+            <option value="">Все</option>
+            {BOOKING_STATUSES.map(opt => <option key={opt.value} value={opt.value}>{opt.label}</option>)}
+                      </select>
+
+          <label className="font-semibold">Номер</label>
+          <ReactSelect
+            options={rooms.map(r => ({ value: String(r.id), label: r.number }))}
+            value={rooms.find(r => String(r.id) === filters.room_id) ? { value: filters.room_id, label: rooms.find(r => String(r.id) === filters.room_id)!.number } : null}
+            onChange={opt => setFilters(f => ({ ...f, room_id: opt ? opt.value : '' }))}
+            isClearable
+            placeholder="Все"
+          />
+
+          <label className="font-semibold">Гость</label>
+          <ReactSelect
+            options={guests.map(g => ({ value: String(g.id), label: g.full_name }))}
+            value={guests.find(g => String(g.id) === filters.guest_id) ? { value: filters.guest_id, label: guests.find(g => String(g.id) === filters.guest_id)!.full_name } : null}
+            onChange={opt => setFilters(f => ({ ...f, guest_id: opt ? opt.value : '' }))}
+            isClearable
+            placeholder="Все"
+          />
+
+          <label className="font-semibold">Количество гостей</label>
+          <input type="number" min={1} max={10} className="input w-full" value={filters.people_count} onChange={e => setFilters(f => ({ ...f, people_count: e.target.value }))} placeholder="Любое" />
+
+          <div className="flex gap-2 mt-4">
+            <button type="button" onClick={() => setFilters({ status: '', room_id: '', guest_id: '', people_count: '' })} className="bg-gray-200 hover:bg-gray-300 text-gray-700 px-5 py-2 rounded font-semibold flex-1">Сбросить</button>
+            <button type="button" onClick={() => setShowFilters(false)} className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-2 rounded font-semibold shadow flex-1">Применить</button>
+                </div>
+              </div>
+            </div>
+      {/* Стили для скрытия курсора в readonly input */}
+      <style jsx global>{`
+        input[readonly] {
+          caret-color: transparent;
+        }
+      `}</style>
+      {toast && <Toast message={toast.message} type={toast.type} onClose={() => setToast(null)} />}
     </div>
   );
 }

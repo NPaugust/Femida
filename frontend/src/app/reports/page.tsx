@@ -12,15 +12,9 @@ const ROOM_CLASS_LABELS: Record<string, string> = {
   standard: 'Стандарт',
   semi_lux: 'Полу-люкс',
   lux: 'Люкс',
-  vip: 'ВИП',
-  proraba: 'Дом прораба',
-  aurora: 'Аврора',
-  domik: 'Домик',
-  three_floor_lux: '3-х этажка люкс',
-  middle_vip_lux: 'Средний ВИП люкс',
-  pink: 'Розовый',
-  sklad: 'Склад',
-  other: 'Другое',
+
+
+
 };
 
 export default function ReportsPage() {

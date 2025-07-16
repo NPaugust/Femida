@@ -42,17 +42,9 @@ function getStatusColor(bookings: Booking[], roomId: number) {
 const ROOM_CLASSES = [
   { value: '', label: 'Все классы' },
   { value: 'standard', label: 'Стандарт' },
-  { value: 'lux', label: 'Люкс' },
   { value: 'semi_lux', label: 'Полу-люкс' },
-  { value: 'vip', label: 'ВИП' },
-  { value: 'proraba', label: 'Дом прораба' },
-  { value: 'aurora', label: 'Аврора' },
-  { value: 'domik', label: 'Домик' },
-  { value: 'three_floor_lux', label: '3-х этажка люкс' },
-  { value: 'middle_vip_lux', label: 'Средний ВИП люкс' },
-  { value: 'pink', label: 'Розовый' },
-  { value: 'sklad', label: 'Склад' },
-  { value: 'other', label: 'Другое' },
+  { value: 'lux', label: 'Люкс' },
+
 ];
 
 const ROOM_CLASS_ICONS: Record<string, React.ReactNode> = {
@@ -73,17 +65,9 @@ const ROOM_CLASS_COLORS: Record<string, string> = {
 
 const ROOM_CLASS_LABELS: Record<string, string> = {
   standard: 'Стандарт',
-  lux: 'Люкс',
   semi_lux: 'Полу-люкс',
-  vip: 'ВИП',
-  proraba: 'Дом прораба',
-  aurora: 'Аврора',
-  domik: 'Домик',
-  three_floor_lux: '3-х этажка люкс',
-  middle_vip_lux: 'Средний ВИП люкс',
-  pink: 'Розовый',
-  sklad: 'Склад',
-  other: 'Другое',
+  lux: 'Люкс',
+
 };
 
 const ROOM_STATUSES = [

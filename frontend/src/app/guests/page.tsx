@@ -10,7 +10,6 @@ import 'react-phone-input-2/lib/style.css';
 import { API_URL } from '../../shared/api';
 import { useSearchParams } from 'next/navigation';
 import ConfirmModal from '../../components/ConfirmModal';
-import { useNotifications } from '../../components/NotificationSystem';
 
 type Guest = {
   id: number;
@@ -35,7 +34,6 @@ const GUEST_STATUSES = [
 
 export default function GuestsPage() {
   const { t } = useTranslation();
-  const { openMessageModal } = useNotifications();
   const [guests, setGuests] = useState<any[]>([]);
   const [bookings, setBookings] = useState<any[]>([]);
   const [error, setError] = useState('');
@@ -933,14 +931,8 @@ export default function GuestsPage() {
                   <span>{selectedGuest.notes}</span>
                 </div>
               )}
-              {/* Кнопка отправки сообщения */}
               <div className="mt-6 pt-4 border-t">
-                <button
-                  onClick={() => openMessageModal(selectedGuest)}
-                  className="w-full flex items-center justify-center gap-2 bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg shadow transition-all"
-                >
-                  <FaComment /> Отправить сообщение
-                </button>
+
               </div>
               {/* История бронирований */}
               <div className="mt-6">

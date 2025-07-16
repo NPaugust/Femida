@@ -10,6 +10,9 @@ from rest_framework.permissions import IsAuthenticated
 import logging
 from django.db.models.signals import post_save, post_delete
 from django.dispatch import receiver
+from rest_framework.views import APIView
+from rest_framework.decorators import api_view, permission_classes
+from django.shortcuts import get_object_or_404
 
 # Настройка логирования
 logger = logging.getLogger(__name__)
@@ -36,7 +39,7 @@ class BuildingViewSet(viewsets.ModelViewSet):
     permission_classes = [permissions.IsAuthenticated]
 
 class RoomViewSet(viewsets.ModelViewSet):
-    queryset = Room.objects.all()
+    queryset = Room.objects.filter(is_deleted=False)
     serializer_class = RoomSerializer
     permission_classes = [permissions.IsAuthenticated]
 
@@ -55,8 +58,18 @@ class RoomViewSet(viewsets.ModelViewSet):
             logger.error(f"Error in RoomViewSet.create: {str(e)}")
             return Response({'error': 'Internal server error'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
+    def destroy(self, request, *args, **kwargs):
+        instance = self.get_object()
+        instance.soft_delete()
+        return Response({'success': True})
+    @action(detail=True, methods=['post'])
+    def restore(self, request, pk=None):
+        instance = self.get_object()
+        instance.restore()
+        return Response({'success': True})
+
 class GuestViewSet(viewsets.ModelViewSet):
-    queryset = Guest.objects.all()
+    queryset = Guest.objects.filter(is_deleted=False)
     serializer_class = GuestSerializer
     permission_classes = [permissions.IsAuthenticated]
 
@@ -95,12 +108,14 @@ class GuestViewSet(viewsets.ModelViewSet):
             return Response({'error': 'Internal server error'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
     def destroy(self, request, *args, **kwargs):
-        try:
-            self.perform_destroy(request, *args, **kwargs)
-            return Response({'success': True})
-        except Exception as e:
-            logger.error(f"Error in GuestViewSet.destroy: {str(e)}")
-            return Response({'error': 'Internal server error'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+        instance = self.get_object()
+        instance.soft_delete()
+        return Response({'success': True})
+    @action(detail=True, methods=['post'])
+    def restore(self, request, pk=None):
+        instance = self.get_object()
+        instance.restore()
+        return Response({'success': True})
 
     def perform_create(self, serializer):
         guest = serializer.save()
@@ -186,7 +201,7 @@ class GuestViewSet(viewsets.ModelViewSet):
             )
 
 class BookingViewSet(viewsets.ModelViewSet):
-    queryset = Booking.objects.all()
+    queryset = Booking.objects.filter(is_deleted=False)
     serializer_class = BookingSerializer
     permission_classes = [permissions.IsAuthenticated]
 
@@ -206,7 +221,53 @@ class BookingViewSet(viewsets.ModelViewSet):
         logger.info(f"Удалено бронирование: {booking_info}")
         # Здесь можно добавить уведомление об удалении
 
+    def destroy(self, request, *args, **kwargs):
+        instance = self.get_object()
+        instance.soft_delete()
+        return Response({'success': True})
+    @action(detail=True, methods=['post'])
+    def restore(self, request, pk=None):
+        instance = self.get_object()
+        instance.restore()
+        return Response({'success': True})
+
 class AuditLogViewSet(viewsets.ModelViewSet):
     queryset = AuditLog.objects.all().order_by('-timestamp')
     serializer_class = AuditLogSerializer
     permission_classes = [permissions.IsAuthenticated]
+
+class TrashViewSet(APIView):
+    permission_classes = [permissions.IsAdminUser]
+
+    def get(self, request, obj_type):
+        if obj_type == 'guests':
+            data = Guest.objects.filter(is_deleted=True)
+            serializer = GuestSerializer(data, many=True)
+            return Response(serializer.data)
+        elif obj_type == 'rooms':
+            data = Room.objects.filter(is_deleted=True)
+            serializer = RoomSerializer(data, many=True)
+            return Response(serializer.data)
+        elif obj_type == 'bookings':
+            data = Booking.objects.filter(is_deleted=True)
+            serializer = BookingSerializer(data, many=True)
+            return Response(serializer.data)
+        return Response({'error': 'Invalid type'}, status=400)
+
+    def post(self, request, action, obj_type, obj_id):
+        model_map = {
+            'guests': Guest,
+            'rooms': Room,
+            'bookings': Booking,
+        }
+        model = model_map.get(obj_type)
+        if not model:
+            return Response({'error': 'Invalid type'}, status=400)
+        instance = get_object_or_404(model, id=obj_id)
+        if action == 'restore':
+            instance.restore()
+            return Response({'success': True})
+        elif action == 'delete':
+            instance.delete()
+            return Response({'success': True})
+        return Response({'error': 'Invalid action'}, status=400)
