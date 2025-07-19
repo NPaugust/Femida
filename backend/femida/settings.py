@@ -218,43 +218,63 @@ CORS_ALLOWED_METHODS = [
 ]
 
 # Настройки логирования
-LOGGING = {
-    'version': 1,
-    'disable_existing_loggers': False,
-    'formatters': {
-        'verbose': {
-            'format': '{levelname} {asctime} {module} {process:d} {thread:d} {message}',
-            'style': '{',
+if DEBUG:
+    LOGGING = {
+        'version': 1,
+        'disable_existing_loggers': False,
+        'formatters': {
+            'verbose': {
+                'format': '{levelname} {asctime} {module} {process:d} {thread:d} {message}',
+                'style': '{',
+            },
+            'simple': {
+                'format': '{levelname} {message}',
+                'style': '{',
+            },
         },
-        'simple': {
-            'format': '{levelname} {message}',
-            'style': '{',
+        'handlers': {
+            'file': {
+                'level': 'INFO',
+                'class': 'logging.FileHandler',
+                'filename': BASE_DIR / 'django.log',
+                'formatter': 'verbose',
+                'encoding': 'utf-8',
+            },
+            'console': {
+                'level': 'DEBUG',
+                'class': 'logging.StreamHandler',
+                'formatter': 'simple',
+            },
         },
-    },
-    'handlers': {
-        'file': {
-            'level': 'INFO',
-            'class': 'logging.FileHandler',
-            'filename': BASE_DIR / 'django.log',
-            'formatter': 'verbose',
-            'encoding': 'utf-8',
+        'loggers': {
+            'django': {
+                'handlers': ['file', 'console'],
+                'level': 'INFO',
+                'propagate': True,
+            },
+            'booking': {
+                'handlers': ['file', 'console'],
+                'level': 'DEBUG',
+                'propagate': True,
+            },
         },
-        'console': {
-            'level': 'DEBUG',
-            'class': 'logging.StreamHandler',
-            'formatter': 'simple',
+    }
+else:
+    # В продакшене отключаем логирование в файл
+    LOGGING = {
+        'version': 1,
+        'disable_existing_loggers': True,
+        'handlers': {
+            'console': {
+                'level': 'ERROR',
+                'class': 'logging.StreamHandler',
+            },
         },
-    },
-    'loggers': {
-        'django': {
-            'handlers': ['file', 'console'],
-            'level': 'INFO',
-            'propagate': True,
+        'loggers': {
+            'django': {
+                'handlers': ['console'],
+                'level': 'ERROR',
+                'propagate': False,
+            },
         },
-        'booking': {
-            'handlers': ['file', 'console'],
-            'level': 'DEBUG',
-            'propagate': True,
-        },
-    },
-}
+    }
