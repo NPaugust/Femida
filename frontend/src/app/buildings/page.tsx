@@ -1,6 +1,9 @@
 "use client";
 import { useEffect, useState } from 'react';
-import { FaPlus, FaEdit, FaTrash, FaChevronDown, FaChevronUp, FaBed, FaBuilding, FaFileCsv } from 'react-icons/fa';
+import { FaPlus, FaEdit, FaTrash, FaChevronDown, FaChevronUp, FaBed, FaBuilding, FaFileCsv, FaSearch, FaFilter, FaTimesCircle } from 'react-icons/fa';
+import StatusBadge from '../../components/StatusBadge';
+import Button from '../../components/Button';
+import LoadingSpinner from '../../components/LoadingSpinner';
 import { API_URL } from '../../shared/api';
 import React from 'react';
 import Pagination from '../../components/Pagination';
@@ -79,21 +82,40 @@ function BuildingModal({ open, onClose, onSave, initial }: {
 
   if (!open) return null;
   return (
-    <div className='fixed inset-0 z-50 flex items-center justify-center bg-black/30 backdrop-blur-sm'>
-      <div className='bg-white rounded-xl shadow-2xl p-8 w-full max-w-xl relative border border-gray-100'>
-        <h2 className='text-xl font-bold mb-6'>{initial ? 'Редактировать корпус' : 'Добавить корпус'}</h2>
-        <button onClick={onClose} className='absolute top-4 right-4 text-gray-400 hover:text-gray-700 text-2xl font-bold'>×</button>
+    <div className='fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm animate-fade-in'>
+      <div className='bg-white rounded-2xl shadow-2xl p-8 w-full max-w-xl relative animate-scale-in border border-gray-100'>
+        <div className="flex items-center gap-3 mb-6">
+          <div className="w-12 h-12 bg-blue-100 rounded-full flex items-center justify-center">
+            <FaBuilding className="text-blue-600 text-xl" />
+          </div>
+          <h2 className='text-xl font-bold text-gray-900'>{initial ? 'Редактировать корпус' : 'Добавить корпус'}</h2>
+        </div>
+        <button onClick={onClose} className='absolute top-4 right-4 text-gray-400 hover:text-gray-700 text-2xl font-bold transition-colors'>×</button>
         <form className='grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-4' onSubmit={handleSubmit}>
-          <label className='font-semibold md:text-right md:pr-2 flex items-center'>Название *</label>
-          <input name='name' className='input w-full' value={form.name} onChange={handleChange} required />
-          <label className='font-semibold md:text-right md:pr-2 flex items-center'>Адрес</label>
-          <input name='address' className='input w-full' value={form.address} onChange={handleChange} />
-          <label className='font-semibold md:text-right md:pr-2 flex items-center'>Описание</label>
-          <textarea name='description' className='input w-full md:col-span-1' rows={2} value={form.description} onChange={handleChange} />
-          {error && <div className='md:col-span-2 text-red-500 text-sm mt-2'>{error}</div>}
+          <label className='font-semibold md:text-right md:pr-2 flex items-center text-gray-700'>Название *</label>
+          <input name='name' className='input w-full focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-200' value={form.name} onChange={handleChange} required placeholder="Введите название корпуса" />
+          <label className='font-semibold md:text-right md:pr-2 flex items-center text-gray-700'>Адрес</label>
+          <input name='address' className='input w-full focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-200' value={form.address} onChange={handleChange} placeholder="Введите адрес корпуса" />
+          <label className='font-semibold md:text-right md:pr-2 flex items-center text-gray-700'>Описание</label>
+          <textarea name='description' className='input w-full md:col-span-1 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-200' rows={3} value={form.description} onChange={handleChange} placeholder="Дополнительная информация о корпусе" />
+          {error && <div className='md:col-span-2 text-red-500 text-sm mt-2 flex items-center gap-1'><FaTimesCircle className="text-xs" />{error}</div>}
           <div className='md:col-span-2 flex justify-end gap-3 mt-6'>
-            <button type='button' onClick={onClose} className='bg-gray-200 hover:bg-gray-300 text-gray-700 px-5 py-2 rounded font-semibold'>Отмена</button>
-            <button type='submit' disabled={loading} className='bg-blue-600 hover:bg-blue-700 text-white px-6 py-2 rounded font-semibold shadow disabled:opacity-60 disabled:cursor-not-allowed'>{loading ? 'Сохранение...' : (initial ? 'Сохранить' : 'Добавить')}</button>
+            <Button
+              variant="ghost"
+              onClick={onClose}
+              className="hover:bg-gray-100"
+            >
+              Отмена
+            </Button>
+            <Button
+              variant="primary"
+              type="submit"
+              loading={loading}
+              disabled={loading}
+              icon={loading ? undefined : <FaBuilding />}
+            >
+              {loading ? 'Сохранение...' : (initial ? 'Сохранить' : 'Добавить')}
+            </Button>
           </div>
         </form>
       </div>
@@ -181,8 +203,30 @@ export default function BuildingsPage() {
     }
   };
 
-  if (loading) return <div className='flex items-center justify-center h-64'><div className='text-center'><div className='w-8 h-8 border-4 border-blue-600 border-t-transparent rounded-full animate-spin mx-auto mb-4'></div><p className='text-gray-600'>Загрузка корпусов...</p></div></div>;
-  if (error) return <div className='text-center p-8'><p className='text-red-600 mb-4'>{error}</p><button onClick={fetchBuildings} className='px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700'>Попробовать снова</button></div>;
+  if (loading) return (
+    <div className='flex items-center justify-center h-full'>
+      <div className='text-center'>
+        <LoadingSpinner size="lg" text="Загрузка корпусов..." />
+      </div>
+    </div>
+  );
+  if (error) return (
+    <div className='flex items-center justify-center h-full'>
+      <div className='text-center'>
+        <div className="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4">
+          <FaTimesCircle className="text-red-600 text-2xl" />
+        </div>
+        <p className='text-red-600 mb-4 text-lg font-medium'>{error}</p>
+        <Button
+          variant="primary"
+          onClick={fetchBuildings}
+          icon={<FaBuilding />}
+        >
+          Попробовать снова
+        </Button>
+      </div>
+    </div>
+  );
 
   // Фильтрация и сортировка корпусов
   const filteredBuildings = buildings
@@ -239,43 +283,53 @@ export default function BuildingsPage() {
           <FaBuilding className='text-blue-600' />
           <h2 className='text-xl font-bold text-center'>Здания</h2>
         </div>
-        <div className='flex items-center gap-2 justify-center'>
-          <input
-            type='text'
-            placeholder='Поиск по названию или адрес'
-            value={search}
-            onChange={e => setSearch(e.target.value)}
-            className='input px-3 py-2 border rounded-lg text-sm w-64 text-center'
-          />
-          <button onClick={exportToCSV} className='bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg font-semibold flex items-center gap-2'>
-            <FaFileCsv /> Экспорт в CSV
-          </button>
-          <button
-            onClick={() => { setShowModal(true); setEditing(null); }}
-            className='bg-blue-600 hover:bg-blue-700 text-white px-5 py-2 rounded-lg font-semibold shadow flex items-center gap-2'
+        <div className='flex items-center gap-3 justify-center'>
+          <div className="relative">
+            <input
+              type='text'
+              placeholder='Поиск по названию или адрес'
+              value={search}
+              onChange={e => setSearch(e.target.value)}
+              className='input pl-3 pr-10 py-2 border rounded-lg text-sm w-64 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-200'
+            />
+            <FaSearch className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={14} />
+          </div>
+          <Button
+            variant="success"
+            onClick={exportToCSV}
+            icon={<FaFileCsv />}
+            className="shadow-lg hover:shadow-xl"
           >
-            <FaPlus /> Добавить корпус
-          </button>
+            Экспорт в CSV
+          </Button>
+          <Button
+            variant="primary"
+            onClick={() => { setShowModal(true); setEditing(null); }}
+            icon={<FaPlus />}
+            className="shadow-lg hover:shadow-xl"
+          >
+            <span className="font-bold">Добавить корпус</span>
+          </Button>
         </div>
       </div>
       {/* Таблица корпусов */}
       <div className='px-6 py-6'>
-        <div className='rounded-lg shadow bg-white w-full'>
+        <div className='rounded-xl shadow-lg bg-white w-full border border-gray-100 overflow-hidden'>
           <table className='w-full text-sm'>
             <thead>
-              <tr className='bg-gray-50 text-gray-700'>
-                <th className='p-3 text-center'>ID</th>
-                <th className='p-3 text-center cursor-pointer' onClick={() => { setSortBy('name'); setSortDir(sortDir === 'asc' ? 'desc' : 'asc'); }}>Название</th>
-                <th className='p-3 text-center cursor-pointer' onClick={() => { setSortBy('address'); setSortDir(sortDir === 'asc' ? 'desc' : 'asc'); }}>Адрес</th>
-                <th className='p-3 text-center cursor-pointer' onClick={() => { setSortBy('description'); setSortDir(sortDir === 'asc' ? 'desc' : 'asc'); }}>Описание</th>
-                <th className='p-3 text-center cursor-pointer' onClick={() => { setSortBy('rooms'); setSortDir(sortDir === 'asc' ? 'desc' : 'asc'); }}>Номера</th>
-                <th className='p-3 text-center'>Действия</th>
+              <tr className='bg-gradient-to-r from-gray-50 to-blue-50 text-gray-700 border-b border-gray-200'>
+                            <th className='p-3 text-center font-bold'>ID</th>
+            <th className='p-3 text-center cursor-pointer font-bold' onClick={() => { setSortBy('name'); setSortDir(sortDir === 'asc' ? 'desc' : 'asc'); }}>Название</th>
+            <th className='p-3 text-center cursor-pointer font-bold' onClick={() => { setSortBy('address'); setSortDir(sortDir === 'asc' ? 'desc' : 'asc'); }}>Адрес</th>
+            <th className='p-3 text-center cursor-pointer font-bold' onClick={() => { setSortBy('description'); setSortDir(sortDir === 'asc' ? 'desc' : 'asc'); }}>Описание</th>
+            <th className='p-3 text-center cursor-pointer font-bold' onClick={() => { setSortBy('rooms'); setSortDir(sortDir === 'asc' ? 'desc' : 'asc'); }}>Номера</th>
+            <th className='p-3 text-center font-bold'>Действия</th>
               </tr>
             </thead>
             <tbody>
               {paginatedBuildings.map((b, idx) => (
                 <React.Fragment key={b.id}>
-                  <tr key={b.id} className={`transition-all border-b last:border-b-0 ${idx % 2 === 1 ? 'bg-gray-50' : 'bg-white'} hover:bg-blue-50`}>
+                  <tr key={b.id} className={`transition-all duration-200 border-b border-gray-100 last:border-b-0 ${idx % 2 === 1 ? 'bg-gray-50/50' : 'bg-white'} hover:bg-gradient-to-r hover:from-blue-50 hover:to-purple-50 group`}>
                     <td className='p-3 text-center'>{b.id}</td>
                     <td className='p-3 text-center font-medium text-gray-900'>{b.name}</td>
                     <td className='p-3 text-center'>{b.address || '—'}</td>
@@ -287,18 +341,18 @@ export default function BuildingsPage() {
                     </td>
                     <td className='p-3 text-center'>
                       <div className='flex items-center gap-2 justify-center'>
-                        <button
-                          className='flex items-center gap-1 text-blue-600 hover:text-blue-800 font-semibold text-xs px-2 py-1 rounded transition-colors bg-blue-50 hover:bg-blue-100'
+                      <button
+                        className='flex items-center gap-1 text-blue-600 hover:text-blue-800 font-semibold text-xs px-2 py-1 rounded transition-colors bg-blue-50 hover:bg-blue-100'
                           onClick={() => {
-                            setExpanded(expanded === b.id ? null : b.id);
-                          }}
-                        >
-                          {expanded === b.id ? <FaChevronUp /> : <FaChevronDown />} Номера
-                        </button>
-                        <button onClick={() => handleEdit(b)} className='bg-blue-100 hover:bg-blue-200 text-blue-700 px-3 py-1 rounded font-semibold flex items-center gap-1 text-xs' title='Редактировать'>
+                          setExpanded(expanded === b.id ? null : b.id);
+                        }}
+                      >
+                        {expanded === b.id ? <FaChevronUp /> : <FaChevronDown />} Номера
+                      </button>
+                        <button onClick={() => handleEdit(b)} className='bg-blue-100 hover:bg-blue-200 text-blue-700 px-3 py-1 rounded-lg font-semibold flex items-center gap-1 text-xs transition-all duration-200 hover:scale-105 shadow-sm' title='Редактировать'>
                           <FaEdit /> Ред.
                         </button>
-                        <button onClick={() => handleDelete(b.id)} className='bg-red-100 hover:bg-red-200 text-red-700 px-3 py-1 rounded font-semibold flex items-center gap-1 text-xs' title='Удалить'>
+                        <button onClick={() => handleDelete(b.id)} className='bg-red-100 hover:bg-red-200 text-red-700 px-3 py-1 rounded-lg font-semibold flex items-center gap-1 text-xs transition-all duration-200 hover:scale-105 shadow-sm' title='Удалить'>
                           <FaTrash /> Удалить
                         </button>
                       </div>
@@ -333,7 +387,7 @@ export default function BuildingsPage() {
                                 </div>
                                 {room.price_per_night && (
                                   <div className='ml-auto text-right'>
-                                    <div className='text-sm font-semibold'>{room.price_per_night} сом</div>
+                                    <div className='text-sm font-semibold'>{Math.round(room.price_per_night).toLocaleString()} сом</div>
                                     <div className='text-xs opacity-75'>за сутки</div>
                                   </div>
                                 )}
@@ -368,13 +422,30 @@ export default function BuildingsPage() {
       <BuildingModal open={showModal} onClose={() => { setShowModal(false); setEditing(null); }} onSave={handleSave} initial={editing} />
       {/* Модалка подтверждения удаления */}
       {showConfirmDelete && (
-        <div className='fixed inset-0 z-50 flex items-center justify-center bg-black/30 backdrop-blur-sm'>
-          <div className='bg-white rounded-xl shadow-2xl p-8 w-full max-w-sm relative border border-gray-100'>
-            <h2 className='text-xl font-bold mb-4'>Удалить корпус?</h2>
-            <p className='mb-6 text-gray-600'>Вы уверены, что хотите удалить корпус <b>№{deleteId}</b>?</p>
+        <div className='fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm animate-fade-in'>
+          <div className='bg-white rounded-2xl shadow-2xl p-8 w-full max-w-md relative animate-scale-in border border-gray-100'>
+            <div className="flex items-center gap-3 mb-6">
+              <div className="w-12 h-12 bg-red-100 rounded-full flex items-center justify-center">
+                <FaTrash className="text-red-600 text-xl" />
+              </div>
+              <h2 className='text-xl font-bold text-gray-900'>Удалить корпус?</h2>
+            </div>
+            <p className='mb-6 text-gray-600 text-lg'>Вы уверены, что хотите удалить корпус <b>№{deleteId}</b>?</p>
             <div className='flex justify-end gap-3'>
-              <button onClick={() => setShowConfirmDelete(false)} className='bg-gray-200 hover:bg-gray-300 text-gray-700 px-5 py-2 rounded font-semibold'>Отмена</button>
-              <button onClick={confirmDelete} className='bg-red-600 hover:bg-red-700 text-white px-6 py-2 rounded font-semibold shadow'>Удалить</button>
+              <Button
+                variant="ghost"
+                onClick={() => setShowConfirmDelete(false)}
+                className="hover:bg-gray-100"
+              >
+                Отмена
+              </Button>
+              <Button
+                variant="danger"
+                onClick={confirmDelete}
+                icon={<FaTrash />}
+              >
+                Удалить
+              </Button>
             </div>
           </div>
         </div>

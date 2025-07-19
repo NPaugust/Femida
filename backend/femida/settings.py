@@ -143,7 +143,7 @@ JAZZMIN_SETTINGS = {
     "site_title": "Пансионат Фемида",
     "site_header": "Админка Фемида",
     "site_brand": "Фемида",
-    "welcome_sign": "Добро пожаловать в админку пансионата Фемида!",
+    "welcome_sign": "Добро пожаловать в админ панель пансионата Фемида!",
     "copyright": "Судебный департамент КР",
     "search_model": ["booking.Room", "booking.Guest", "booking.Booking"],
     "show_sidebar": True,

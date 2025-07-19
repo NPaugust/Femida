@@ -1,8 +1,13 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import { FaUser, FaEdit, FaTrash, FaFileCsv, FaPlus, FaFilter, FaEye, FaSearch, FaCalendarAlt, FaPhone, FaIdCard, FaMoneyBillWave, FaChartBar, FaCheckCircle, FaTimesCircle, FaUserPlus, FaBuilding, FaCreditCard } from 'react-icons/fa';
+import StatusBadge from '../../components/StatusBadge';
+import Button from '../../components/Button';
+import LoadingSpinner from '../../components/LoadingSpinner';
+import ExportConfirmModal from '../../components/ExportConfirmModal';
+import HighlightedText from '../../components/HighlightedText';
 import dynamic from 'next/dynamic';
 import 'react-phone-input-2/lib/style.css';
 import { API_URL } from '../../shared/api';
@@ -139,20 +144,25 @@ function GuestModal({ open, onClose, onSave, initial }: GuestModalProps) {
   if (!open) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 backdrop-blur-sm animate-fade-in">
-      <div className="bg-white rounded-xl shadow-2xl p-8 w-full max-w-xl relative animate-modal-in border border-gray-100 focus:outline-none">
-        <h2 className="text-xl font-bold mb-6">{initial ? 'Редактировать гостя' : 'Добавить гостя'}</h2>
-        <button onClick={onClose} className="absolute top-4 right-4 text-gray-400 hover:text-gray-700 text-2xl font-bold focus:outline-none">×</button>
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm animate-fade-in">
+      <div className="bg-white rounded-2xl shadow-2xl p-8 w-full max-w-xl relative animate-scale-in border border-gray-100 focus:outline-none">
+        <div className="flex items-center gap-3 mb-6">
+          <div className="w-12 h-12 bg-blue-100 rounded-full flex items-center justify-center">
+            <FaUser className="text-blue-600 text-xl" />
+          </div>
+          <h2 className="text-xl font-bold text-gray-900">{initial ? 'Редактировать гостя' : 'Добавить гостя'}</h2>
+        </div>
+        <button onClick={onClose} className="absolute top-4 right-4 text-gray-400 hover:text-gray-700 text-2xl font-bold focus:outline-none transition-colors">×</button>
         <form className="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-4" onSubmit={handleSubmit}>
-          <label className="font-semibold md:text-right md:pr-2 flex items-center">ФИО *</label>
-          <input type="text" name="full_name" className="input w-full" value={form.full_name} onChange={handleChange} />
-          {errors.full_name && <div className="md:col-span-2 text-red-500 text-sm">{errors.full_name}</div>}
+          <label className="font-semibold md:text-right md:pr-2 flex items-center text-gray-700">ФИО *</label>
+          <input type="text" name="full_name" className="input w-full focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-200" value={form.full_name} onChange={handleChange} placeholder="Введите полное имя" />
+          {errors.full_name && <div className="md:col-span-2 text-red-500 text-sm flex items-center gap-1 mt-1"><FaTimesCircle className="text-xs" />{errors.full_name}</div>}
 
-          <label className="font-semibold md:text-right md:pr-2 flex items-center">ИНН *</label>
-          <input type="text" name="inn" className="input w-full" value={form.inn} onChange={handleChange} maxLength={14} />
-          {errors.inn && <div className="md:col-span-2 text-red-500 text-sm">{errors.inn}</div>}
+          <label className="font-semibold md:text-right md:pr-2 flex items-center text-gray-700">ИНН *</label>
+          <input type="text" name="inn" className="input w-full focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-200" value={form.inn} onChange={handleChange} maxLength={14} placeholder="14 цифр" />
+          {errors.inn && <div className="md:col-span-2 text-red-500 text-sm flex items-center gap-1 mt-1"><FaTimesCircle className="text-xs" />{errors.inn}</div>}
 
-          <label className="font-semibold md:text-right md:pr-2 flex items-center">Телефон *</label>
+          <label className="font-semibold md:text-right md:pr-2 flex items-center text-gray-700">Телефон *</label>
           <PhoneInput
             country={'kg'}
             value={form.phone.replace('+', '')}
@@ -163,23 +173,37 @@ function GuestModal({ open, onClose, onSave, initial }: GuestModalProps) {
             placeholder="Введите номер телефона"
             enableSearch
           />
-          {errors.phone && <div className="md:col-span-2 text-red-500 text-sm">{errors.phone}</div>}
+          {errors.phone && <div className="md:col-span-2 text-red-500 text-sm flex items-center gap-1 mt-1"><FaTimesCircle className="text-xs" />{errors.phone}</div>}
 
-          <label className="font-semibold md:text-right md:pr-2 flex items-center">Статус</label>
-          <select name="status" className="input w-full" value={form.status} onChange={handleChange}>
+          <label className="font-semibold md:text-right md:pr-2 flex items-center text-gray-700">Статус</label>
+          <select name="status" className="input w-full focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-200" value={form.status} onChange={handleChange}>
             {GUEST_STATUSES.map(status => (
               <option key={status.value} value={status.value}>{status.label}</option>
             ))}
           </select>
 
-          <label className="font-semibold md:text-right md:pr-2 flex items-center">Примечания</label>
-          <textarea name="notes" className="input w-full md:col-span-1" rows={2} value={form.notes} onChange={handleChange} />
+          <label className="font-semibold md:text-right md:pr-2 flex items-center text-gray-700">Примечания</label>
+          <textarea name="notes" className="input w-full md:col-span-1 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-200" rows={3} value={form.notes} onChange={handleChange} placeholder="Дополнительная информация о госте" />
 
-          {errors.submit && <div className="md:col-span-2 text-red-500 text-sm mt-2">{errors.submit}</div>}
+          {errors.submit && <div className="md:col-span-2 text-red-500 text-sm mt-2 flex items-center gap-1"><FaTimesCircle className="text-xs" />{errors.submit}</div>}
 
           <div className="md:col-span-2 flex justify-end gap-3 mt-6">
-            <button type="button" onClick={onClose} className="bg-gray-200 hover:bg-gray-300 text-gray-700 px-5 py-2 rounded font-semibold">Отмена</button>
-            <button type="submit" disabled={loading} className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-2 rounded font-semibold shadow disabled:opacity-60 disabled:cursor-not-allowed">{loading ? 'Сохранение...' : (initial ? 'Сохранить' : 'Добавить')}</button>
+            <Button
+              variant="ghost"
+              onClick={onClose}
+              className="hover:bg-gray-100"
+            >
+              Отмена
+            </Button>
+            <Button
+              variant="primary"
+              type="submit"
+              loading={loading}
+              disabled={loading}
+              icon={loading ? undefined : <FaUser />}
+            >
+              {loading ? 'Сохранение...' : (initial ? 'Сохранить' : 'Добавить')}
+            </Button>
           </div>
         </form>
       </div>
@@ -189,6 +213,7 @@ function GuestModal({ open, onClose, onSave, initial }: GuestModalProps) {
 
 export default function GuestsPage() {
   const { t } = useTranslation();
+  const searchParams = useSearchParams();
   const [guests, setGuests] = useState<Guest[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -196,7 +221,7 @@ export default function GuestsPage() {
   const [editingGuest, setEditingGuest] = useState<Guest | null>(null);
   const [showFilters, setShowFilters] = useState(false);
   const [filters, setFilters] = useState({
-    search: '',
+    search: searchParams.get('search') || '',
     status: '',
     spentFrom: '',
     spentTo: '',
@@ -209,11 +234,29 @@ export default function GuestsPage() {
   // Пагинация
   const [currentPage, setCurrentPage] = useState(1);
   const guestsPerPage = 9;
+  const [showExportModal, setShowExportModal] = useState(false);
+  const [exportLoading, setExportLoading] = useState(false);
 
   useEffect(() => {
     fetchGuests();
     fetchBookings();
   }, []);
+
+  // Фильтры: закрытие по клику вне
+  const filterPanelRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    function handleClickOutside(e: MouseEvent) {
+      if (showFilters && filterPanelRef.current && !filterPanelRef.current.contains(e.target as Node)) {
+        setShowFilters(false);
+      }
+    }
+    if (showFilters) {
+      document.addEventListener('mousedown', handleClickOutside);
+    } else {
+      document.removeEventListener('mousedown', handleClickOutside);
+    }
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [showFilters]);
 
   const fetchGuests = async () => {
     try {
@@ -325,26 +368,35 @@ export default function GuestsPage() {
   };
 
   const exportToCSV = () => {
-    const headers = ['ID', 'ФИО', 'ИНН', 'Телефон', 'Статус', 'Посещений', 'Оплачено', 'Дата регистрации'];
-    const csvContent = [
-      headers.join(','),
-      ...filteredGuests.map(guest => [
-        guest.id,
-        `"${guest.full_name}"`,
-        guest.inn,
-        guest.phone,
-        GUEST_STATUSES.find(s => s.value === guest.status)?.label || guest.status,
-        guest.visits_count || 0,
-        guest.total_spent || 0,
-        guest.registration_date || ''
-      ].join(','))
-    ].join('\n');
+    setShowExportModal(true);
+  };
 
-    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-    const link = document.createElement('a');
-    link.href = URL.createObjectURL(blob);
-    link.download = `guests_${new Date().toISOString().split('T')[0]}.csv`;
-    link.click();
+  const handleExportConfirm = () => {
+    setExportLoading(true);
+    setTimeout(() => {
+      const headers = ['ID', 'ФИО', 'ИНН', 'Телефон', 'Статус', 'Посещений', 'Оплачено', 'Дата регистрации'];
+      const csvContent = [
+        headers.join(','),
+        ...filteredGuests.map(guest => [
+          guest.id,
+          `"${guest.full_name}"`,
+          guest.inn,
+          guest.phone,
+          GUEST_STATUSES.find(s => s.value === guest.status)?.label || guest.status,
+          guest.visits_count || 0,
+          guest.total_spent || 0,
+          guest.registration_date || ''
+        ].join(','))
+      ].join('\n');
+
+      const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+      const link = document.createElement('a');
+      link.href = URL.createObjectURL(blob);
+      link.download = `гости_${new Date().toISOString().split('T')[0]}.csv`;
+      link.click();
+      setExportLoading(false);
+      setShowExportModal(false);
+    }, 1000);
   };
 
   const filteredGuests = guests.filter(guest => {
@@ -373,7 +425,22 @@ export default function GuestsPage() {
     const total = guests.length;
     const active = guests.filter(g => g.status === 'active').length;
     const totalBookings = guests.reduce((sum, g) => sum + (g.visits_count || 0), 0);
-    const totalPaid = guests.reduce((sum, g) => sum + (Number(g.total_spent) || 0), 0);
+    
+    // Рассчитываем общую сумму оплаченных бронирований
+    const totalPaid = bookings
+      .filter(b => b.payment_status === 'paid')
+      .reduce((sum, b) => {
+        let amount = b.total_amount || (b as any).price || b.price_per_night || 0;
+        
+        // Если это строка, убираем пробелы и конвертируем
+        if (typeof amount === 'string') {
+          amount = (amount as string).replace(/\s/g, '').replace(',', '.');
+        }
+        
+        const numAmount = typeof amount === 'string' ? parseFloat(amount) : amount;
+        const validAmount = typeof numAmount === 'number' && !isNaN(numAmount) ? numAmount : 0;
+        return sum + validAmount;
+      }, 0);
     
     return { total, active, totalBookings, totalPaid };
   };
@@ -392,17 +459,13 @@ export default function GuestsPage() {
   );
   const bookedGuestsCount = guests.filter(g => bookedGuestIds.has(g.id)).length;
 
-  // Для колонки 'Оплачено' в таблице гостей
-  const totalPaid = bookings
-    .filter(b => b.payment_status === 'paid')
-    .reduce((sum, b) => sum + (b.total_amount || 0), 0);
+  // Используем totalPaid из статистики
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center h-64">
+      <div className="flex items-center justify-center h-full">
         <div className="text-center">
-          <div className="w-8 h-8 border-4 border-blue-600 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
-          <p className="text-gray-600">Загрузка гостей...</p>
+          <LoadingSpinner size="lg" text="Загрузка гостей..." />
         </div>
       </div>
     );
@@ -410,14 +473,20 @@ export default function GuestsPage() {
 
   if (error) {
     return (
-      <div className="text-center p-8">
-        <p className="text-red-600 mb-4">{error}</p>
-        <button 
+      <div className="flex items-center justify-center h-full">
+        <div className="text-center">
+          <div className="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4">
+            <FaTimesCircle className="text-red-600 text-2xl" />
+          </div>
+          <p className="text-red-600 mb-4 text-lg font-medium">{error}</p>
+          <Button
+            variant="primary"
           onClick={fetchGuests}
-          className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+            icon={<FaUser />}
         >
           Попробовать снова
-        </button>
+          </Button>
+        </div>
       </div>
     );
   }
@@ -438,172 +507,122 @@ export default function GuestsPage() {
           </div>
           
           <div className="flex items-center gap-3">
-            <button
+            <Button
+              variant={showFilters ? "primary" : "ghost"}
               onClick={() => setShowFilters(!showFilters)}
-              className={`flex items-center gap-2 px-4 py-2 rounded-lg border transition-colors ${
-                showFilters 
-                  ? 'bg-blue-50 border-blue-200 text-blue-700' 
-                  : 'bg-white border-gray-300 text-gray-700 hover:bg-gray-50'
-              }`}
+              icon={<FaFilter />}
+              className={showFilters ? "shadow-lg" : ""}
             >
-              <FaFilter />
               Фильтры
-            </button>
+            </Button>
             
-            <button
+            <Button
+              variant="success"
               onClick={exportToCSV}
-              className="flex items-center gap-2 px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg transition-colors"
+              icon={<FaFileCsv />}
+              className="shadow-lg hover:shadow-xl"
             >
-              <FaFileCsv />
               Экспорт
-            </button>
+            </Button>
             
-            <button
+            <Button
+              variant="primary"
               onClick={() => setShowModal(true)}
-              className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors"
+              icon={<FaPlus />}
+              className="shadow-lg hover:shadow-xl"
             >
-              <FaPlus />
-              Добавить
-            </button>
+              <span className="font-bold">Добавить</span>
+            </Button>
           </div>
         </div>
       </div>
 
       {/* Статистика */}
       <div className="px-6 py-4">
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-          <div className="bg-white rounded-lg shadow-sm p-4 border border-gray-200">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 bg-blue-100 rounded-lg flex items-center justify-center">
-                <FaUser className="text-blue-600" />
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 md:gap-6">
+          <div className="bg-gradient-to-br from-blue-50 to-blue-100 rounded-2xl shadow-lg p-6 border border-blue-200 hover:shadow-xl transition-all duration-300 group">
+            <div className="flex items-center gap-4">
+              <div className="w-12 h-12 bg-blue-500 rounded-xl flex items-center justify-center shadow-lg group-hover:scale-110 transition-transform">
+                <FaUser className="text-white text-xl" />
               </div>
               <div>
-                <p className="text-sm text-gray-600">Всего гостей</p>
-                <p className="text-2xl font-bold text-gray-900">{stats.total}</p>
+                <p className="text-sm text-blue-700 font-bold">Всего гостей</p>
+                <p className="text-3xl font-bold text-blue-900">{stats.total}</p>
               </div>
             </div>
           </div>
           
-          <div className="bg-white rounded-lg shadow-sm p-4 border border-gray-200">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 bg-green-100 rounded-lg flex items-center justify-center">
-                <FaCheckCircle className="text-green-600" />
+          <div className="bg-gradient-to-br from-green-50 to-green-100 rounded-2xl shadow-lg p-6 border border-green-200 hover:shadow-xl transition-all duration-300 group">
+            <div className="flex items-center gap-4">
+              <div className="w-12 h-12 bg-green-500 rounded-xl flex items-center justify-center shadow-lg group-hover:scale-110 transition-transform">
+                <FaCheckCircle className="text-white text-xl" />
               </div>
               <div>
-                <p className="text-sm text-gray-600">Активных</p>
-                <p className="text-2xl font-bold text-gray-900">{stats.active}</p>
+                <p className="text-sm text-green-700 font-bold">Активных</p>
+                <p className="text-3xl font-bold text-green-900">{stats.active}</p>
               </div>
             </div>
           </div>
           
-          <div className="bg-white rounded-lg shadow-sm p-4 border border-gray-200">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 bg-orange-100 rounded-lg flex items-center justify-center">
-                <FaCalendarAlt className="text-orange-600" />
+          <div className="bg-gradient-to-br from-orange-50 to-orange-100 rounded-2xl shadow-lg p-6 border border-orange-200 hover:shadow-xl transition-all duration-300 group">
+            <div className="flex items-center gap-4">
+              <div className="w-12 h-12 bg-orange-500 rounded-xl flex items-center justify-center shadow-lg group-hover:scale-110 transition-transform">
+                <FaCalendarAlt className="text-white text-xl" />
               </div>
               <div>
-                <p className="text-sm text-gray-600">Забронированных гостей</p>
-                <p className="text-2xl font-bold text-gray-900">{bookedGuestsCount}</p>
+                <p className="text-sm text-orange-700 font-bold">Забронированных</p>
+                <p className="text-3xl font-bold text-orange-900">{bookedGuestsCount}</p>
               </div>
             </div>
           </div>
           
-          <div className="bg-white rounded-lg shadow-sm p-4 border border-gray-200">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 bg-green-100 rounded-lg flex items-center justify-center">
-                <FaCreditCard className="text-green-600" />
+          <div className="bg-gradient-to-br from-purple-50 to-purple-100 rounded-2xl shadow-lg p-6 border border-purple-200 hover:shadow-xl transition-all duration-300 group">
+            <div className="flex items-center gap-4">
+              <div className="w-12 h-12 bg-purple-500 rounded-xl flex items-center justify-center shadow-lg group-hover:scale-110 transition-transform">
+                <FaCreditCard className="text-white text-xl" />
               </div>
               <div>
-                <p className="text-sm text-gray-600">Оплачено</p>
-                <p className="text-2xl font-bold text-gray-900">{Math.round(totalPaid).toLocaleString()} сом</p>
+                <p className="text-sm text-purple-700 font-bold">Оплачено</p>
+                <p className="text-3xl font-bold text-purple-900">{Math.round(stats.totalPaid).toLocaleString()} сом</p>
               </div>
             </div>
           </div>
         </div>
       </div>
 
-      {/* Фильтры */}
-      {showFilters && (
-        <div className="px-6 py-4 bg-white border-b border-gray-200">
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Поиск</label>
-              <div className="relative">
-                <FaSearch className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" />
-                <input
-                  type="text"
-                  value={filters.search}
-                  onChange={(e) => setFilters(prev => ({ ...prev, search: e.target.value }))}
-                  className="w-full pl-10 pr-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                  placeholder="ФИО, телефон, ИНН..."
-                />
-              </div>
-            </div>
-            
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Статус</label>
-              <select
-                value={filters.status}
-                onChange={(e) => setFilters(prev => ({ ...prev, status: e.target.value }))}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-              >
-                <option value="">Все статусы</option>
-                {GUEST_STATUSES.map(status => (
-                  <option key={status.value} value={status.value}>{status.label}</option>
-                ))}
-              </select>
-            </div>
-            
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Оплачено</label>
-              <div className="flex gap-2">
-                <input
-                  type="number"
-                  value={filters.spentFrom}
-                  onChange={(e) => setFilters(prev => ({ ...prev, spentFrom: e.target.value }))}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                  placeholder="От"
-                />
-                <input
-                  type="number"
-                  value={filters.spentTo}
-                  onChange={(e) => setFilters(prev => ({ ...prev, spentTo: e.target.value }))}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                  placeholder="До"
-                />
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
+
 
       {/* Контент */}
       <div className="px-6 py-6">
         {paginatedGuests.length === 0 ? (
-          <div className="text-center py-12">
-            <FaUser className="text-gray-400 text-6xl mx-auto mb-4" />
-            <h3 className="text-lg font-medium text-gray-900 mb-2">Нет гостей</h3>
-            <p className="text-gray-500 mb-4">
+          <div className="text-center py-16">
+            <div className="w-24 h-24 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-6">
+              <FaUser className="text-gray-400 text-3xl" />
+            </div>
+            <h3 className="text-xl font-bold text-gray-900 mb-3">Нет гостей</h3>
+            <p className="text-gray-500 mb-6 text-lg">
               {filters.search || filters.status || filters.spentFrom
                 ? 'Попробуйте изменить фильтры'
                 : 'Добавьте первого гостя'
               }
             </p>
             {!filters.search && !filters.status && !filters.spentFrom && (
-              <button
+              <Button
+                variant="primary"
                 onClick={() => setShowModal(true)}
-                className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors mx-auto"
+                icon={<FaPlus />}
+                className="shadow-lg hover:shadow-xl"
               >
-                <FaPlus />
                 Добавить гостя
-              </button>
+              </Button>
             )}
           </div>
         ) : (
-          <div className='rounded-lg shadow bg-white w-full'>
-            <table className='w-full text-sm'>
+          <div className='rounded-xl shadow-lg bg-white w-full border border-gray-100 overflow-hidden'>
+            <div className="overflow-x-auto">
+              <table className='w-full text-sm min-w-[800px]'>
               <thead>
-                <tr className='bg-gray-50 text-gray-700'>
+                <tr className='bg-gradient-to-r from-gray-50 to-blue-50 text-gray-700 border-b border-gray-200'>
                   <th className='p-3 text-left '>
                     <input
                       type='checkbox'
@@ -612,18 +631,19 @@ export default function GuestsPage() {
                       className='rounded border-gray-300 text-blue-600 focus:ring-blue-500'
                     />
                   </th>
-                  <th className='p-3 text-center '>Гость</th>
-                  <th className='p-3 text-center '>ПИН</th>
-                  <th className='p-3 text-center '>Контакты</th>
-                  <th className='p-3 text-center '>Бронирование</th>
-                  <th className='p-3 text-center '>Статус</th>
-                  <th className='p-3 text-center '>Оплачено</th>
-                  <th className='p-3 text-center'>Действия</th>
+                              <th className='p-3 text-center font-bold'>Гость</th>
+            <th className='p-3 text-center font-bold'>ПИН</th>
+            <th className='p-3 text-center font-bold'>Контакты</th>
+            <th className='p-3 text-center font-bold'>Примечания</th>
+            <th className='p-3 text-center font-bold'>Бронирование</th>
+            <th className='p-3 text-center font-bold'>Статус</th>
+            <th className='p-3 text-center font-bold'>Оплачено</th>
+            <th className='p-3 text-center font-bold'>Действия</th>
                 </tr>
               </thead>
               <tbody>
                 {paginatedGuests.map((guest, idx) => (
-                  <tr key={guest.id} className={`transition-all border-b last:border-b-0 ${idx % 2 === 1 ? 'bg-gray-50' : 'bg-white'} hover:bg-blue-50`}>
+                  <tr key={guest.id} className={`transition-all duration-200 border-b border-gray-100 last:border-b-0 ${idx % 2 === 1 ? 'bg-gray-50/50' : 'bg-white'} hover:bg-gradient-to-r hover:from-blue-50 hover:to-purple-50 group`}>
                     <td className='p-3 text-left '>
                       <input
                         type='checkbox'
@@ -633,8 +653,12 @@ export default function GuestsPage() {
                       />
                     </td>
                     <td className='p-3 text-center '>
-                      <span className='font-medium text-gray-900'>{guest.full_name}</span>
-                      <div className='text-xs text-gray-500'>ID: {guest.id}</div>
+                      <HighlightedText 
+                        text={guest.full_name} 
+                        searchQuery={filters.search} 
+                        className='font-medium text-gray-900' 
+                      />
+                      <div className='text-xs text-gray-500'>#{guest.id}</div>
                     </td>
                     <td className='p-3 text-center '>
                       <span className='text-sm font-mono'>{guest.inn}</span>
@@ -645,28 +669,40 @@ export default function GuestsPage() {
                         {guest.phone}
                       </span>
                     </td>
+                    <td className='p-3 text-center '>
+                      <span className='text-sm text-gray-600 max-w-xs truncate block' title={guest.notes}>
+                        {guest.notes || '—'}
+                      </span>
+                    </td>
                     <td className='p-3 text-center'>
                       {(() => {
                         const guestBookings = bookings.filter(b => 
                           (typeof b.guest === 'object' ? b.guest.id : b.guest) === guest.id
                         );
                         if (guestBookings.length === 0) return 'Не забронирован';
-                        const active = guestBookings.find(b => b.status === 'active');
-                        if (active) return 'Забронирован';
-                        const cancelled = guestBookings.find(b => b.status === 'cancelled');
-                        if (cancelled) return 'Отменён';
+                        
+                        // Используем автоматическое определение статуса
+                        const now = new Date();
+                        const activeBooking = guestBookings.find(b => {
+                          const checkIn = new Date(b.check_in);
+                          const checkOut = new Date(b.check_out);
+                          return now >= checkIn && now <= checkOut;
+                        });
+                        
+                        if (activeBooking) return 'Забронирован';
+                        
+                        const futureBooking = guestBookings.find(b => {
+                          const checkIn = new Date(b.check_in);
+                          return now < checkIn;
+                        });
+                        
+                        if (futureBooking) return 'Ожидает заезда';
+                        
                         return 'Не забронирован';
                       })()}
                     </td>
                     <td className='p-3 text-center '>
-                      {(() => {
-                        const status = GUEST_STATUSES.find(s => s.value === guest.status);
-                        return (
-                          <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${status?.color || 'bg-gray-100 text-gray-800'}`}>
-                            {status?.label || guest.status}
-                          </span>
-                        );
-                      })()}
+                      <StatusBadge status={guest.status} size="sm" />
                     </td>
                     <td className='p-3 text-center'>
                       <span className='font-medium text-green-600'>
@@ -674,9 +710,22 @@ export default function GuestsPage() {
                           const guestBookings = bookings.filter(b => 
                             (typeof b.guest === 'object' ? b.guest.id : b.guest) === guest.id
                           );
+                          
                           const paidBookings = guestBookings.filter(b => b.payment_status === 'paid');
-                          const totalPaid = paidBookings.reduce((sum, b) => sum + (b.total_amount || 0), 0);
-                          return totalPaid > 0 ? `${Math.round(totalPaid).toLocaleString()} сом` : 'Нет';
+                          
+                          const totalPaid = paidBookings.reduce((sum, b) => {
+                            let amount = b.total_amount || (b as any).price || b.price_per_night || 0;
+                            
+                            // Если это строка, убираем пробелы и конвертируем
+                            if (typeof amount === 'string') {
+                              amount = (amount as string).replace(/\s/g, '').replace(',', '.');
+                            }
+                            
+                            const numAmount = typeof amount === 'string' ? parseFloat(amount) : amount;
+                            const validAmount = typeof numAmount === 'number' && !isNaN(numAmount) ? numAmount : 0;
+                            return sum + validAmount;
+                          }, 0);
+                          return totalPaid > 0 ? `${Math.round(totalPaid).toLocaleString()} сом` : '0 сом';
                         })()}
                       </span>
                     </td>
@@ -684,14 +733,14 @@ export default function GuestsPage() {
                       <div className='flex items-center gap-2 justify-center'>
                         <button
                           onClick={() => handleEdit(guest)}
-                          className='bg-blue-100 hover:bg-blue-200 text-blue-700 px-3 py-1 rounded font-semibold flex items-center gap-1 text-xs'
+                          className='bg-blue-100 hover:bg-blue-200 text-blue-700 px-3 py-1 rounded-lg font-semibold flex items-center gap-1 text-xs transition-all duration-200 hover:scale-105 shadow-sm'
                           title='Редактировать'
                         >
                           <FaEdit /> Ред.
                         </button>
                         <button
                           onClick={() => handleDelete(guest.id)}
-                          className='bg-red-100 hover:bg-red-200 text-red-700 px-3 py-1 rounded font-semibold flex items-center gap-1 text-xs'
+                          className='bg-red-100 hover:bg-red-200 text-red-700 px-3 py-1 rounded-lg font-semibold flex items-center gap-1 text-xs transition-all duration-200 hover:scale-105 shadow-sm'
                           title='Удалить'
                         >
                           <FaTrash /> Удалить
@@ -702,6 +751,7 @@ export default function GuestsPage() {
                 ))}
               </tbody>
             </table>
+            </div>
           </div>
         )}
 
@@ -783,6 +833,73 @@ export default function GuestsPage() {
           setDeleteTarget(null);
         }}
       />
+
+      {/* Модальное окно подтверждения экспорта */}
+      <ExportConfirmModal
+        open={showExportModal}
+        onClose={() => setShowExportModal(false)}
+        onConfirm={handleExportConfirm}
+        title="Экспорт гостей"
+        description={`Экспорт ${filteredGuests.length} гостей в CSV файл`}
+        fileName={`гости_${new Date().toISOString().split('T')[0]}.csv`}
+        loading={exportLoading}
+      />
+
+      {/* Выдвижная панель фильтров */}
+      <div className={`fixed top-0 right-0 h-full w-full max-w-xs bg-white shadow-2xl z-50 transition-transform duration-300 ${showFilters ? 'translate-x-0' : 'translate-x-full'}`} style={{minWidth: 320}} ref={filterPanelRef}>
+        <div className="flex items-center justify-between p-4 border-b">
+          <h2 className="text-xl font-bold">Фильтры</h2>
+          <button onClick={() => setShowFilters(false)} className="text-gray-400 hover:text-gray-700 text-2xl font-bold focus:outline-none">×</button>
+        </div>
+        <div className="p-4 flex flex-col gap-4">
+          <label className="font-semibold">Поиск</label>
+          <div className="relative">
+            <input
+              type="text"
+              value={filters.search}
+              onChange={(e) => setFilters(prev => ({ ...prev, search: e.target.value }))}
+              className="w-full pl-3 pr-10 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              placeholder="ФИО, телефон, ИНН..."
+            />
+            <FaSearch className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={14} />
+          </div>
+
+          <label className="font-semibold">Статус</label>
+          <select
+            value={filters.status}
+            onChange={(e) => setFilters(prev => ({ ...prev, status: e.target.value }))}
+            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+          >
+            <option value="">Все статусы</option>
+            {GUEST_STATUSES.map(status => (
+              <option key={status.value} value={status.value}>{status.label}</option>
+            ))}
+          </select>
+
+          <label className="font-semibold">Оплачено от</label>
+          <input
+            type="number"
+            value={filters.spentFrom}
+            onChange={(e) => setFilters(prev => ({ ...prev, spentFrom: e.target.value }))}
+            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+            placeholder="От"
+          />
+
+          <label className="font-semibold">Оплачено до</label>
+          <input
+            type="number"
+            value={filters.spentTo}
+            onChange={(e) => setFilters(prev => ({ ...prev, spentTo: e.target.value }))}
+            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+            placeholder="До"
+          />
+
+          <div className="flex gap-2 mt-4">
+            <button type="button" onClick={() => setFilters({ search: '', status: '', spentFrom: '', spentTo: '' })} className="bg-gray-200 hover:bg-gray-300 text-gray-700 px-5 py-2 rounded font-semibold flex-1">Сбросить</button>
+            <button type="button" onClick={() => setShowFilters(false)} className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-2 rounded font-semibold shadow flex-1">Применить</button>
+          </div>
+        </div>
+      </div>
     </div>
   );
 }

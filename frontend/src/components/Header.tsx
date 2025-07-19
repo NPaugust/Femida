@@ -1,28 +1,15 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { FaUserCircle, FaSignOutAlt, FaCog, FaQuestionCircle } from 'react-icons/fa';
+import { FaUserCircle, FaSignOutAlt, FaCog, FaQuestionCircle, FaSearch } from 'react-icons/fa';
 import { API_URL } from '../shared/api';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from '../shared/hooks/useAuth';
+import { useRouter } from 'next/navigation';
 
-// SVG Lady Justice (упрощённая векторизация)
-const LadyJusticeLogo = () => (
-  <svg width="40" height="40" viewBox="0 0 200 200" fill="none" xmlns="http://www.w3.org/2000/svg">
-    <g>
-      <path d="M40 60 Q60 30 90 50 Q120 70 130 40 Q140 20 160 40 Q170 60 150 80 Q130 100 120 120 Q110 140 130 150 Q150 160 170 140" stroke="#17406A" strokeWidth="8" fill="none"/>
-      <ellipse cx="60" cy="60" rx="18" ry="22" fill="#17406A"/>
-      <rect x="120" y="120" width="12" height="40" rx="6" fill="#17406A"/>
-      <path d="M126 160 Q130 180 150 180 Q170 180 174 160" stroke="#17406A" strokeWidth="6" fill="none"/>
-      <g>
-        <line x1="126" y1="140" x2="174" y2="140" stroke="#17406A" strokeWidth="6"/>
-        <ellipse cx="135" cy="180" rx="8" ry="6" fill="none" stroke="#17406A" strokeWidth="3"/>
-        <ellipse cx="165" cy="180" rx="8" ry="6" fill="none" stroke="#17406A" strokeWidth="3"/>
-        <line x1="135" y1="140" x2="135" y2="180" stroke="#17406A" strokeWidth="3"/>
-        <line x1="165" y1="140" x2="165" y2="180" stroke="#17406A" strokeWidth="3"/>
-      </g>
-    </g>
-  </svg>
+// Логотип Фемида
+const FemidaLogo = () => (
+  <img src="/femida-logo.png" alt="Фемида" className="w-full h-full rounded-full" />
 );
 
 type User = {
@@ -44,8 +31,10 @@ export default function Header({ onSidebarOpen }: { onSidebarOpen: () => void })
     first_name: '',
     last_name: '',
   });
+  const [searchQuery, setSearchQuery] = useState('');
   const { i18n } = useTranslation();
   const { logout } = useAuth();
+  const router = useRouter();
 
   useEffect(() => {
     const fetchUser = async () => {
@@ -143,54 +132,133 @@ export default function Header({ onSidebarOpen }: { onSidebarOpen: () => void })
     localStorage.setItem('lang', lang);
   };
 
+  const handleSearch = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (searchQuery.trim()) {
+      const query = searchQuery.trim().toLowerCase();
+      
+      // Проверяем названия разделов
+      if (query.includes('бронирования') || query.includes('бронирование') || query.includes('booking')) {
+        router.push(`/bookings?search=${encodeURIComponent(searchQuery.trim())}`);
+        return;
+      }
+      
+      if (query.includes('гости') || query.includes('гость') || query.includes('guest')) {
+        router.push(`/guests?search=${encodeURIComponent(searchQuery.trim())}`);
+        return;
+      }
+      
+      if (query.includes('отчеты') || query.includes('отчёт') || query.includes('отчёты') || query.includes('report')) {
+        router.push(`/reports?search=${encodeURIComponent(searchQuery.trim())}`);
+        return;
+      }
+      
+      if (query.includes('корзина') || query.includes('trash') || query.includes('удаленные')) {
+        router.push(`/trash?search=${encodeURIComponent(searchQuery.trim())}`);
+        return;
+      }
+      
+      if (query.includes('корпус') || query.includes('здание') || query.includes('building')) {
+        router.push(`/buildings?search=${encodeURIComponent(searchQuery.trim())}`);
+        return;
+      }
+      
+      if (query.includes('номер') || query.includes('комната') || query.includes('room') || /^\d+$/.test(query)) {
+        router.push(`/rooms?search=${encodeURIComponent(searchQuery.trim())}`);
+        return;
+      }
+      
+      // По умолчанию ищем в бронированиях
+      router.push(`/bookings?search=${encodeURIComponent(searchQuery.trim())}`);
+    }
+  };
+
   return (
-    <header className="bg-white shadow-sm border-b border-gray-200 flex items-center justify-between px-4 md:px-8 py-4 h-16">
+    <header className="bg-gradient-to-r from-white to-blue-50 shadow-lg border-b border-blue-100 flex items-center justify-between px-6 md:px-8 py-4 h-18">
       {/* Кнопка-меню для открытия сайдбара */}
-      <button className="mr-4 p-2 text-gray-500 hover:text-blue-600 focus:outline-none rounded-full bg-gray-100 hover:bg-blue-100 transition" aria-label="Меню" onClick={onSidebarOpen}>
-        <svg width="24" height="24" fill="none" viewBox="0 0 24 24"><path d="M4 6h16M4 12h16M4 18h16" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/></svg>
+      <button 
+        className="mr-4 p-3 text-gray-600 hover:text-blue-700 focus:outline-none rounded-xl bg-white/80 hover:bg-blue-100 transition-all duration-300 shadow-sm hover:shadow-md" 
+        aria-label="Меню" 
+        onClick={onSidebarOpen}
+      >
+        <svg width="20" height="20" fill="none" viewBox="0 0 24 24">
+          <path d="M4 6h16M4 12h16M4 18h16" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/>
+        </svg>
       </button>
+      
       {/* Логотип и заголовок */}
-      <div className="flex items-center gap-3 cursor-pointer select-none" onClick={() => window.location.href = '/dashboard'}>
-        <div className="w-10 h-10 flex items-center justify-center">
-          <LadyJusticeLogo />
+      <div 
+        className="flex items-center gap-4 cursor-pointer select-none group transition-all duration-300 hover:scale-105" 
+        onClick={() => window.location.href = '/dashboard'}
+      >
+        <div className="w-12 h-12 flex items-center justify-center bg-white rounded-2xl shadow-lg group-hover:shadow-xl transition-all duration-300 border border-gray-200">
+          <FemidaLogo />
         </div>
         <div>
-          <h1 className="text-xl font-bold text-gray-800 leading-tight">Фемида</h1>
-          <p className="text-xs text-gray-500 -mt-1">Админ-панель пансионата</p>
+          <h1 className="text-2xl font-bold text-gray-800 leading-tight group-hover:text-blue-700 transition-colors">Фемида</h1>
+          <p className="text-sm text-gray-600 -mt-1 font-bold">Админ-панель пансионата</p>
         </div>
       </div>
+      
       {/* Правая часть */}
-      <div className="flex items-center gap-4 ml-auto">
+      <div className="flex items-center gap-3 ml-auto">
+        {/* Глобальный поиск */}
+        <div className="max-w-lg">
+          <form onSubmit={handleSearch} className="relative">
+            <div className="relative">
+              <input
+                type="text"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                placeholder="Поиск гостей, номеров, бронирований..."
+                className="w-full pl-10 pr-4 py-2 bg-white/90 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent shadow-sm hover:shadow-md transition-all duration-300 text-sm"
+              />
+              <FaSearch className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={14} />
+            </div>
+          </form>
+        </div>
         {/* Документация */}
-        <a href="/docs" className="p-2 text-gray-400 hover:text-blue-600 transition-colors rounded-full" title="Документация">
+        <a 
+          href="/docs" 
+          className="p-3 text-gray-500 hover:text-blue-600 transition-all duration-300 rounded-xl bg-white/80 hover:bg-blue-100 shadow-sm hover:shadow-md" 
+          title="Документация"
+        >
           <FaQuestionCircle size={18} />
         </a>
+        
         {/* Настройки */}
-        <button className="p-2 text-gray-400 hover:text-gray-600 transition-colors rounded-full" onClick={() => setShowProfile(true)} title="Профиль">
+        <button 
+          className="p-3 text-gray-500 hover:text-blue-600 transition-all duration-300 rounded-xl bg-white/80 hover:bg-blue-100 shadow-sm hover:shadow-md" 
+          onClick={() => setShowProfile(true)} 
+          title="Профиль"
+        >
           <FaCog size={18} />
         </button>
+        
         {/* Информация о пользователе и выход */}
         {user && (
-          <div className="flex items-center gap-2">
-            <span className={`px-2 py-1 rounded-full text-xs font-medium ${getRoleColor(user.role)}`}>{getRoleLabel(user.role)}</span>
-            <div className="w-8 h-8 bg-blue-100 rounded-full flex items-center justify-center">
-              <FaUserCircle className="text-blue-600" size={20} />
+          <div className="flex items-center gap-3">
+            <span className={`px-3 py-2 rounded-xl text-sm font-semibold shadow-sm ${getRoleColor(user.role)}`}>
+              {getRoleLabel(user.role)}
+            </span>
+            <div className="w-10 h-10 bg-white rounded-xl flex items-center justify-center shadow-lg border border-gray-200">
+              <FaUserCircle className="text-gray-600" size={20} />
             </div>
             <button
               onClick={handleLogout}
-              className="flex items-center gap-2 px-3 py-2 text-sm text-red-600 hover:text-red-700 hover:bg-red-50 rounded-lg transition-colors"
+              className="flex items-center gap-2 px-4 py-2 text-sm text-red-600 hover:text-red-700 hover:bg-red-50 rounded-xl transition-all duration-300 shadow-sm hover:shadow-md"
               title="Выйти"
             >
               <FaSignOutAlt size={14} />
-              <span className="hidden sm:inline">Выйти</span>
+              <span className="hidden sm:inline font-medium">Выйти</span>
             </button>
           </div>
         )}
 
         {loading && (
           <div className="flex items-center gap-3">
-            <div className="w-8 h-8 bg-gray-200 rounded-full animate-pulse"></div>
-            <div className="w-20 h-4 bg-gray-200 rounded animate-pulse"></div>
+            <div className="w-10 h-10 bg-gray-200 rounded-xl animate-pulse"></div>
+            <div className="w-24 h-4 bg-gray-200 rounded animate-pulse"></div>
           </div>
         )}
       </div>

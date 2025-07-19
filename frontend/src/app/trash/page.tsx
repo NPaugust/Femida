@@ -1,8 +1,10 @@
 "use client";
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
+import { useSearchParams } from "next/navigation";
 import { FaTrash, FaUndo, FaTrashAlt, FaEye, FaFilter, FaSearch, FaBed, FaUser, FaCalendarCheck, FaExclamationTriangle } from "react-icons/fa";
 import { API_URL } from "../../shared/api";
 import ConfirmModal from "../../components/ConfirmModal";
+import HighlightedText from "../../components/HighlightedText";
 import Pagination from '../../components/Pagination';
 
 interface TrashItem {
@@ -15,12 +17,13 @@ interface TrashItem {
 }
 
 export default function TrashPage() {
+  const searchParams = useSearchParams();
   const [trashItems, setTrashItems] = useState<TrashItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [showFilters, setShowFilters] = useState(false);
   const [filters, setFilters] = useState({
-    search: '',
+    search: searchParams.get('search') || '',
     type: '',
     dateFrom: '',
     dateTo: '',
@@ -58,6 +61,22 @@ export default function TrashPage() {
     fetchTrashData();
   }, []);
 
+  // Фильтры: закрытие по клику вне
+  const filterPanelRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    function handleClickOutside(e: MouseEvent) {
+      if (showFilters && filterPanelRef.current && !filterPanelRef.current.contains(e.target as Node)) {
+        setShowFilters(false);
+      }
+    }
+    if (showFilters) {
+      document.addEventListener('mousedown', handleClickOutside);
+    } else {
+      document.removeEventListener('mousedown', handleClickOutside);
+    }
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [showFilters]);
+
   const fetchTrashData = async () => {
     try {
       const token = localStorage.getItem('access');
@@ -78,7 +97,7 @@ export default function TrashPage() {
           id: item.id,
           type: type.slice(0, -1),
           name: item.number || item.full_name || `Бронирование #${item.id}`,
-          description: item.description || '',
+          description: item.description || item.notes || item.comment || '',
           deleted_at: item.deleted_at || '',
           data: item,
         })));
@@ -266,29 +285,53 @@ export default function TrashPage() {
   const stats = getTrashStatistics();
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen bg-gradient-to-br from-gray-50 to-red-50">
       {/* Верхняя панель */}
-      <div className="bg-white border-b border-gray-200 px-6 py-4">
+      <div className="bg-white border-b border-red-200 px-6 py-4 shadow-sm">
         <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
           <div className="flex items-center gap-4">
+            <div className="w-12 h-12 bg-gradient-to-br from-red-500 to-red-600 rounded-xl flex items-center justify-center shadow-lg">
+              <FaTrash className="text-white text-xl" />
+            </div>
+            <div>
             <h1 className="text-2xl font-bold text-gray-900">Корзина</h1>
-            <div className="flex items-center gap-2 text-sm text-gray-500">
-              <FaTrash className="text-red-600" />
-              <span>{stats.total} удалённых элементов</span>
+              <p className="text-sm text-gray-600">Удаленные элементы</p>
+            </div>
+            <div className="flex items-center gap-2 text-sm text-gray-500 bg-red-50 px-3 py-1 rounded-full">
+              <FaExclamationTriangle className="text-red-600" />
+              <span>{stats.total} элементов</span>
             </div>
           </div>
           
           <div className="flex items-center gap-3">
             <button
               onClick={() => setShowFilters(!showFilters)}
-              className={`flex items-center gap-2 px-4 py-2 rounded-lg border transition-colors ${
+              className={`flex items-center gap-2 px-4 py-2 rounded-xl border transition-all duration-300 ${
                 showFilters 
-                  ? 'bg-blue-50 border-blue-200 text-blue-700' 
-                  : 'bg-white border-gray-300 text-gray-700 hover:bg-gray-50'
+                  ? 'bg-red-50 border-red-200 text-red-700 shadow-md' 
+                  : 'bg-white border-gray-300 text-gray-700 hover:bg-gray-50 hover:shadow-md'
               }`}
             >
               <FaFilter />
               Фильтры
+            </button>
+            
+            <button
+              onClick={handleMassRestore}
+              disabled={selectedItemIds.length === 0}
+              className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-green-500 to-green-600 hover:from-green-600 hover:to-green-700 disabled:from-gray-300 disabled:to-gray-400 disabled:cursor-not-allowed text-white rounded-xl transition-all duration-300 shadow-lg hover:shadow-xl"
+            >
+              <FaUndo />
+              Восстановить
+            </button>
+            
+            <button
+              onClick={handleMassDelete}
+              disabled={selectedItemIds.length === 0}
+              className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-red-500 to-red-600 hover:from-red-600 hover:to-red-700 disabled:from-gray-300 disabled:to-gray-400 disabled:cursor-not-allowed text-white rounded-xl transition-all duration-300 shadow-lg hover:shadow-xl"
+            >
+              <FaTrashAlt />
+              Удалить
             </button>
           </div>
         </div>
@@ -296,111 +339,58 @@ export default function TrashPage() {
 
       {/* Статистика */}
       <div className="px-6 py-4">
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-          <div className="bg-white rounded-lg shadow-sm p-4 border border-gray-200">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 bg-red-100 rounded-lg flex items-center justify-center">
-                <FaTrash className="text-red-600" />
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+          <div className="bg-gradient-to-br from-red-50 to-red-100 rounded-2xl shadow-lg p-6 border border-red-200 hover:shadow-xl transition-all duration-300 group">
+            <div className="flex items-center gap-4">
+              <div className="w-12 h-12 bg-red-500 rounded-xl flex items-center justify-center shadow-lg group-hover:scale-110 transition-transform">
+                <FaTrash className="text-white text-xl" />
               </div>
               <div>
-                <p className="text-sm text-gray-600">Всего удалено</p>
-                <p className="text-2xl font-bold text-gray-900">{stats.total}</p>
+                <p className="text-sm text-red-700 font-bold">Всего удалено</p>
+                <p className="text-3xl font-bold text-red-900">{stats.total}</p>
               </div>
             </div>
           </div>
           
-          <div className="bg-white rounded-lg shadow-sm p-4 border border-gray-200">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 bg-blue-100 rounded-lg flex items-center justify-center">
-                <FaBed className="text-blue-600" />
+          <div className="bg-gradient-to-br from-blue-50 to-blue-100 rounded-2xl shadow-lg p-6 border border-blue-200 hover:shadow-xl transition-all duration-300 group">
+            <div className="flex items-center gap-4">
+              <div className="w-12 h-12 bg-blue-500 rounded-xl flex items-center justify-center shadow-lg group-hover:scale-110 transition-transform">
+                <FaBed className="text-white text-xl" />
               </div>
               <div>
-                <p className="text-sm text-gray-600">Номеров</p>
-                <p className="text-2xl font-bold text-gray-900">{stats.rooms}</p>
+                <p className="text-sm text-blue-700 font-bold">Номеров</p>
+                <p className="text-3xl font-bold text-blue-900">{stats.rooms}</p>
               </div>
             </div>
           </div>
           
-          <div className="bg-white rounded-lg shadow-sm p-4 border border-gray-200">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 bg-green-100 rounded-lg flex items-center justify-center">
-                <FaUser className="text-green-600" />
+          <div className="bg-gradient-to-br from-green-50 to-green-100 rounded-2xl shadow-lg p-6 border border-green-200 hover:shadow-xl transition-all duration-300 group">
+            <div className="flex items-center gap-4">
+              <div className="w-12 h-12 bg-green-500 rounded-xl flex items-center justify-center shadow-lg group-hover:scale-110 transition-transform">
+                <FaUser className="text-white text-xl" />
               </div>
               <div>
-                <p className="text-sm text-gray-600">Гостей</p>
-                <p className="text-2xl font-bold text-gray-900">{stats.guests}</p>
+                <p className="text-sm text-green-700 font-bold">Гостей</p>
+                <p className="text-3xl font-bold text-green-900">{stats.guests}</p>
               </div>
             </div>
           </div>
           
-          <div className="bg-white rounded-lg shadow-sm p-4 border border-gray-200">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 bg-purple-100 rounded-lg flex items-center justify-center">
-                <FaCalendarCheck className="text-purple-600" />
+          <div className="bg-gradient-to-br from-purple-50 to-purple-100 rounded-2xl shadow-lg p-6 border border-purple-200 hover:shadow-xl transition-all duration-300 group">
+            <div className="flex items-center gap-4">
+              <div className="w-12 h-12 bg-purple-500 rounded-xl flex items-center justify-center shadow-lg group-hover:scale-110 transition-transform">
+                <FaCalendarCheck className="text-white text-xl" />
               </div>
               <div>
-                <p className="text-sm text-gray-600">Бронирований</p>
-                <p className="text-2xl font-bold text-gray-900">{stats.bookings}</p>
+                <p className="text-sm text-purple-700 font-bold">Бронирований</p>
+                <p className="text-3xl font-bold text-purple-900">{stats.bookings}</p>
               </div>
             </div>
           </div>
         </div>
       </div>
 
-      {/* Фильтры */}
-      {showFilters && (
-        <div className="px-6 py-4 bg-white border-b border-gray-200">
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Поиск</label>
-              <div className="relative">
-                <FaSearch className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" />
-                <input
-                  type="text"
-                  value={filters.search}
-                  onChange={(e) => setFilters(prev => ({ ...prev, search: e.target.value }))}
-                  className="w-full pl-10 pr-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                  placeholder="Название, описание..."
-                />
-              </div>
-            </div>
-            
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Тип</label>
-              <select
-                value={filters.type}
-                onChange={(e) => setFilters(prev => ({ ...prev, type: e.target.value }))}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-              >
-                <option value="">Все типы</option>
-                <option value="room">Номера</option>
-                <option value="guest">Гости</option>
-                <option value="booking">Бронирования</option>
-              </select>
-            </div>
-            
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Дата удаления</label>
-              <input
-                type="date"
-                value={filters.dateFrom}
-                onChange={(e) => setFilters(prev => ({ ...prev, dateFrom: e.target.value }))}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-              />
-            </div>
-            
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">До</label>
-              <input
-                type="date"
-                value={filters.dateTo}
-                onChange={(e) => setFilters(prev => ({ ...prev, dateTo: e.target.value }))}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-              />
-            </div>
-          </div>
-        </div>
-      )}
+
 
       {/* Контент */}
       <div className="px-6 py-6">
@@ -428,11 +418,11 @@ export default function TrashPage() {
                       className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
                     />
                   </th>
-                  <th className="p-3 text-left text-sm font-medium text-gray-700">Тип</th>
-                  <th className="p-3 text-left text-sm font-medium text-gray-700">Название</th>
-                  <th className="p-3 text-left text-sm font-medium text-gray-700">Описание</th>
-                  <th className="p-3 text-left text-sm font-medium text-gray-700">Дата удаления</th>
-                  <th className="p-3 text-left text-sm font-medium text-gray-700">Действия</th>
+                              <th className="p-3 text-left text-sm font-bold text-gray-700">Тип</th>
+            <th className="p-3 text-left text-sm font-bold text-gray-700">Название</th>
+            <th className="p-3 text-left text-sm font-bold text-gray-700">Описание</th>
+            <th className="p-3 text-left text-sm font-bold text-gray-700">Дата удаления</th>
+            <th className="p-3 text-left text-sm font-bold text-gray-700">Действия</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-200">
@@ -455,8 +445,12 @@ export default function TrashPage() {
                       </div>
                     </td>
                     <td className="p-3 text-left">
-                      <div className="font-medium text-gray-900">{item.name}</div>
-                      <div className="text-sm text-gray-500">ID: {item.id}</div>
+                      <HighlightedText 
+                        text={item.name} 
+                        searchQuery={filters.search} 
+                        className="font-medium text-gray-900" 
+                      />
+                      <div className="text-sm text-gray-500">#{item.id}</div>
                     </td>
                     <td className="p-3 text-left">
                       <div className="text-sm text-gray-700">{item.description}</div>
@@ -576,6 +570,60 @@ export default function TrashPage() {
           setActionType(null);
         }}
       />
+
+      {/* Выдвижная панель фильтров */}
+      <div className={`fixed top-0 right-0 h-full w-full max-w-xs bg-white shadow-2xl z-50 transition-transform duration-300 ${showFilters ? 'translate-x-0' : 'translate-x-full'}`} style={{minWidth: 320}} ref={filterPanelRef}>
+        <div className="flex items-center justify-between p-4 border-b">
+          <h2 className="text-xl font-bold">Фильтры</h2>
+          <button onClick={() => setShowFilters(false)} className="text-gray-400 hover:text-gray-700 text-2xl font-bold focus:outline-none">×</button>
+        </div>
+        <div className="p-4 flex flex-col gap-4">
+          <label className="font-semibold">Поиск</label>
+          <div className="relative">
+            <input
+              type="text"
+              value={filters.search}
+              onChange={(e) => setFilters(prev => ({ ...prev, search: e.target.value }))}
+              className="w-full pl-3 pr-10 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              placeholder="Название, описание..."
+            />
+            <FaSearch className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={14} />
+          </div>
+
+          <label className="font-semibold">Тип</label>
+          <select
+            value={filters.type}
+            onChange={(e) => setFilters(prev => ({ ...prev, type: e.target.value }))}
+            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+          >
+            <option value="">Все типы</option>
+            <option value="room">Номера</option>
+            <option value="guest">Гости</option>
+            <option value="booking">Бронирования</option>
+          </select>
+
+          <label className="font-semibold">Дата удаления</label>
+          <input
+            type="date"
+            value={filters.dateFrom}
+            onChange={(e) => setFilters(prev => ({ ...prev, dateFrom: e.target.value }))}
+            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+          />
+
+          <label className="font-semibold">До</label>
+          <input
+            type="date"
+            value={filters.dateTo}
+            onChange={(e) => setFilters(prev => ({ ...prev, dateTo: e.target.value }))}
+            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+          />
+
+          <div className="flex gap-2 mt-4">
+            <button type="button" onClick={() => setFilters({ search: '', type: '', dateFrom: '', dateTo: '' })} className="bg-gray-200 hover:bg-gray-300 text-gray-700 px-5 py-2 rounded font-semibold flex-1">Сбросить</button>
+            <button type="button" onClick={() => setShowFilters(false)} className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-2 rounded font-semibold shadow flex-1">Применить</button>
+          </div>
+        </div>
+      </div>
     </div>
   );
 } 

@@ -308,7 +308,7 @@ export default function UsersPage() {
             onClick={() => setShowAddModal(true)}
             className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded shadow transition-all duration-200"
           >
-            <FaPlus /> Добавить сотрудника
+            <FaPlus /> <span className="font-bold">Добавить сотрудника</span>
           </button>
         </div>
       </div>
@@ -429,11 +429,11 @@ export default function UsersPage() {
         <table className='w-full text-sm'>
           <thead>
             <tr className='bg-gray-50 text-gray-700'>
-              <th className="p-3 text-center">Пользователь</th>
-              <th className="p-3 text-center">Роль</th>
-              <th className="p-3 text-center">Контакты</th>
-              <th className="p-3 text-center">Статус</th>
-              <th className="p-3 text-center">Действия</th>
+                          <th className="p-3 text-center font-bold">Пользователь</th>
+            <th className="p-3 text-center font-bold">Роль</th>
+            <th className="p-3 text-center font-bold">Контакты</th>
+            <th className="p-3 text-center font-bold">Статус</th>
+            <th className="p-3 text-center font-bold">Действия</th>
             </tr>
           </thead>
           <tbody>

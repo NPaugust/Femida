@@ -21,11 +21,17 @@ export default function SidebarDrawer({ open, setOpen }: { open: boolean, setOpe
   // Получаем роль пользователя из localStorage
   useEffect(() => {
     const user = localStorage.getItem('user');
+    const role = localStorage.getItem('role');
+    
     if (user) {
       try {
         const parsed = JSON.parse(user);
-        setUserRole(parsed.role || 'admin');
-      } catch {}
+        setUserRole(parsed.role || role || 'admin');
+      } catch {
+        setUserRole(role || 'admin');
+      }
+    } else if (role) {
+      setUserRole(role);
     }
   }, []);
 
@@ -63,22 +69,20 @@ export default function SidebarDrawer({ open, setOpen }: { open: boolean, setOpe
       {/* Sidebar */}
       <aside
         ref={sidebarRef}
-        className={`fixed top-0 left-0 h-full z-40 transition-all duration-300 flex flex-col
+        className={`fixed top-0 left-0 h-full z-40 transition-all duration-300 flex flex-col bg-white border-r border-gray-200
           ${open ? "w-64" : "w-0 overflow-hidden"}`}
         style={{ 
-          background: "linear-gradient(180deg, #1e3a8a 0%, #1e40af 100%)", 
-          color: "#fff", 
           minWidth: open ? 256 : 0, 
-          boxShadow: open ? '0 0 32px 0 rgba(0,0,0,0.2)' : undefined 
+          boxShadow: open ? '0 0 32px 0 rgba(0,0,0,0.1)' : undefined 
         }}
       >
-        <div className="flex items-center justify-between px-6 py-6 border-b border-blue-600/30">
+        <div className="flex items-center justify-between px-6 py-6 border-b border-gray-200">
           <div className={`transition-all ${open ? "opacity-100" : "opacity-0 w-0"}`}>
-            <span className="font-bold text-2xl text-white">Фемида</span>
-            <div className="text-blue-200 text-sm mt-1">Админ-панель</div>
+            <span className="font-bold text-2xl text-gray-900">Фемида</span>
+            <div className="text-gray-600 text-sm mt-1">Админ-панель</div>
           </div>
           <button
-            className="text-blue-200 text-xl focus:outline-none ml-auto bg-blue-600/30 rounded-full p-2 hover:bg-blue-600/50 transition-colors"
+            className="text-gray-600 text-xl focus:outline-none ml-auto bg-gray-100 rounded-full p-2 hover:bg-gray-200 transition-colors"
             onClick={() => setOpen(false)}
             aria-label="Закрыть меню"
           >
@@ -93,14 +97,14 @@ export default function SidebarDrawer({ open, setOpen }: { open: boolean, setOpe
             }
             
             return (
-              <Link
-                key={item.href}
-                href={item.href}
-                className={`flex items-center gap-4 px-4 py-3 rounded-xl text-blue-100 hover:bg-blue-600/30 hover:text-white transition-all font-medium group ${open ? "justify-start" : "justify-center"}`}
-              >
+            <Link
+              key={item.href}
+              href={item.href}
+                className={`flex items-center gap-4 px-4 py-3 rounded-xl text-gray-700 hover:bg-blue-50 hover:text-blue-700 transition-all font-medium group ${open ? "justify-start" : "justify-center"}`}
+            >
                 <span className="text-xl group-hover:scale-110 transition-transform">{item.icon}</span>
-                <span className={`transition-all ${open ? "block" : "hidden"}`}>{item.label}</span>
-              </Link>
+              <span className={`transition-all ${open ? "block" : "hidden"}`}>{item.label}</span>
+            </Link>
             );
           })}
         </nav>

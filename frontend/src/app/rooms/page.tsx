@@ -3,6 +3,11 @@
 import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { FaBed, FaCrown, FaStar, FaEdit, FaTrash, FaFileCsv, FaPlus, FaFilter, FaSearch, FaBuilding, FaUsers, FaMoneyBillWave, FaCalendarAlt, FaCheckCircle, FaTimesCircle } from 'react-icons/fa';
+import StatusBadge from '../../components/StatusBadge';
+import Button from '../../components/Button';
+import LoadingSpinner from '../../components/LoadingSpinner';
+import ExportConfirmModal from '../../components/ExportConfirmModal';
+import HighlightedText from '../../components/HighlightedText';
 import { API_URL } from '../../shared/api';
 import { useSearchParams } from 'next/navigation';
 import ConfirmModal from '../../components/ConfirmModal';
@@ -217,22 +222,27 @@ function RoomModal({ open, onClose, onSave, initial, buildings }: RoomModalProps
   if (!open) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 backdrop-blur-sm animate-fade-in">
-      <div className="bg-white rounded-xl shadow-2xl p-8 w-full max-w-xl relative animate-modal-in border border-gray-100 focus:outline-none">
-        <h2 className="text-xl font-bold mb-6">{initial ? 'Редактировать номер' : 'Добавить номер'}</h2>
-        <button onClick={onClose} className="absolute top-4 right-4 text-gray-400 hover:text-gray-700 text-2xl font-bold focus:outline-none">×</button>
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm animate-fade-in">
+      <div className="bg-white rounded-2xl shadow-2xl p-8 w-full max-w-xl relative animate-scale-in border border-gray-100 focus:outline-none">
+        <div className="flex items-center gap-3 mb-6">
+          <div className="w-12 h-12 bg-blue-100 rounded-full flex items-center justify-center">
+            <FaBed className="text-blue-600 text-xl" />
+          </div>
+          <h2 className="text-xl font-bold text-gray-900">{initial ? 'Редактировать номер' : 'Добавить номер'}</h2>
+        </div>
+        <button onClick={onClose} className="absolute top-4 right-4 text-gray-400 hover:text-gray-700 text-2xl font-bold focus:outline-none transition-colors">×</button>
         <form className="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-4" onSubmit={handleSubmit}>
-          <label className="font-semibold md:text-right md:pr-2 flex items-center">Номер *</label>
-          <input type="text" name="number" className="input w-full" value={form.number} onChange={handleChange} />
+          <label className="font-semibold md:text-right md:pr-2 flex items-center text-gray-700">Номер *</label>
+          <input type="text" name="number" className="input w-full focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-200" value={form.number} onChange={handleChange} placeholder="Введите номер комнаты" />
 
-          <label className="font-semibold md:text-right md:pr-2 flex items-center">Корпус *</label>
-          <select name="building" className="input w-full" value={form.building} onChange={handleChange} required>
+          <label className="font-semibold md:text-right md:pr-2 flex items-center text-gray-700">Корпус *</label>
+          <select name="building" className="input w-full focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-200" value={form.building} onChange={handleChange} required>
             <option value="">Выберите корпус</option>
             {buildings.map(b => <option key={b.id} value={b.id}>{b.name}</option>)}
           </select>
 
-          <label className="font-semibold md:text-right md:pr-2 flex items-center">Класс номера</label>
-          <select name="room_class" className="input w-full" value={String(form.room_class)} onChange={handleChange}>
+          <label className="font-semibold md:text-right md:pr-2 flex items-center text-gray-700">Класс номера</label>
+          <select name="room_class" className="input w-full focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-200" value={String(form.room_class)} onChange={handleChange}>
             {uniqueRoomClasses.map(cls => <option key={cls.value} value={cls.value}>{cls.label}</option>)}
           </select>
 
@@ -241,11 +251,6 @@ function RoomModal({ open, onClose, onSave, initial, buildings }: RoomModalProps
 
           <label className="font-semibold md:text-right md:pr-2 flex items-center">Цена *</label>
           <input type="number" name="price_per_night" min={0} className="input w-full" value={form.price_per_night} onChange={handleChange} />
-
-          <label className="font-semibold md:text-right md:pr-2 flex items-center">Статус</label>
-          <select name="status" className="input w-full" value={form.status} onChange={handleChange}>
-            {ROOM_STATUSES.map(status => <option key={status.value} value={status.value}>{status.label}</option>)}
-          </select>
 
           <label className="font-semibold md:text-right md:pr-2 flex items-center">Количество комнат</label>
           <input type="number" name="rooms_count" min={1} className="input w-full" value={form.rooms_count} onChange={handleChange} />
@@ -264,8 +269,22 @@ function RoomModal({ open, onClose, onSave, initial, buildings }: RoomModalProps
 
           {/* Кнопки */}
           <div className="md:col-span-2 flex justify-end gap-3 mt-6">
-            <button type="button" onClick={onClose} className="bg-gray-200 hover:bg-gray-300 text-gray-700 px-5 py-2 rounded font-semibold">Отмена</button>
-            <button type="submit" disabled={loading} className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-2 rounded font-semibold shadow disabled:opacity-60 disabled:cursor-not-allowed">{loading ? 'Сохранение...' : (initial ? 'Сохранить' : 'Добавить')}</button>
+            <Button
+              variant="ghost"
+              onClick={onClose}
+              className="hover:bg-gray-100"
+            >
+              Отмена
+            </Button>
+            <Button
+              variant="primary"
+              type="submit"
+              loading={loading}
+              disabled={loading}
+              icon={loading ? undefined : <FaBed />}
+            >
+              {loading ? 'Сохранение...' : (initial ? 'Сохранить' : 'Добавить')}
+            </Button>
           </div>
         </form>
       </div>
@@ -275,6 +294,7 @@ function RoomModal({ open, onClose, onSave, initial, buildings }: RoomModalProps
 
 export default function RoomsPage() {
   const { t } = useTranslation();
+  const searchParams = useSearchParams();
   const [rooms, setRooms] = useState<Room[]>([]);
   const [buildings, setBuildings] = useState<Building[]>([]);
   const [loading, setLoading] = useState(true);
@@ -283,9 +303,8 @@ export default function RoomsPage() {
   const [editingRoom, setEditingRoom] = useState<Room | null>(null);
   const [showFilters, setShowFilters] = useState(false);
   const [filters, setFilters] = useState({
-    search: '',
+    search: searchParams.get('search') || '',
     roomClass: '',
-    status: '',
     building: '',
     priceFrom: '',
     priceTo: '',
@@ -295,6 +314,8 @@ export default function RoomsPage() {
   const [selectedRoomIds, setSelectedRoomIds] = useState<number[]>([]);
   const [showConfirmDelete, setShowConfirmDelete] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<number | number[] | null>(null);
+  const [showExportModal, setShowExportModal] = useState(false);
+  const [exportLoading, setExportLoading] = useState(false);
   
   // Пагинация
   const [currentPage, setCurrentPage] = useState(1);
@@ -303,6 +324,18 @@ export default function RoomsPage() {
   useEffect(() => {
     fetchData();
   }, []);
+
+  // Фильтры: закрытие по клику вне
+  useEffect(() => {
+    function handleClickOutside(e: MouseEvent) {
+      const target = e.target as HTMLElement;
+      if (showFilters && !target.closest('.filter-panel') && !target.closest('[data-filter-button]')) {
+        setShowFilters(false);
+      }
+    }
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [showFilters]);
 
   const fetchData = async () => {
     try {
@@ -405,26 +438,36 @@ export default function RoomsPage() {
   };
 
   const exportToCSV = () => {
-    const headers = ['ID', 'Номер', 'Здание', 'Класс', 'Вместимость', 'Статус', 'Цена', 'Активен'];
-    const csvContent = [
-      headers.join(','),
-      ...filteredRooms.map(room => [
-        room.id,
-        `"${room.number}"`,
-        `"${room.building?.name || ''}"`,
-        typeof room.room_class === 'object' ? room.room_class.label : room.room_class,
-        room.capacity,
-        ROOM_STATUSES.find(s => s.value === room.status)?.label || room.status,
-        room.price_per_night,
-        room.is_active ? 'Да' : 'Нет'
-      ].join(','))
-    ].join('\n');
+    setShowExportModal(true);
+  };
 
-    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-    const link = document.createElement('a');
-    link.href = URL.createObjectURL(blob);
-    link.download = `rooms_${new Date().toISOString().split('T')[0]}.csv`;
-    link.click();
+  const handleExportConfirm = () => {
+    setExportLoading(true);
+    setTimeout(() => {
+      const headers = ['ID', 'Номер', 'Здание', 'Класс', 'Вместимость', 'Комнат', 'Удобства', 'Цена', 'Активен'];
+      const csvContent = [
+        headers.join(','),
+        ...filteredRooms.map(room => [
+          room.id,
+          `"${room.number}"`,
+          `"${room.building?.name || ''}"`,
+          typeof room.room_class === 'object' ? room.room_class.label : room.room_class,
+          room.capacity,
+          room.rooms_count || 1,
+          `"${room.amenities || ''}"`,
+          room.price_per_night,
+          room.is_active ? 'Да' : 'Нет'
+        ].join(','))
+      ].join('\n');
+
+      const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+      const link = document.createElement('a');
+      link.href = URL.createObjectURL(blob);
+      link.download = `номера_${new Date().toISOString().split('T')[0]}.csv`;
+      link.click();
+      setExportLoading(false);
+      setShowExportModal(false);
+    }, 1000);
   };
 
   const filteredRooms = rooms.filter(room => {
@@ -435,8 +478,6 @@ export default function RoomsPage() {
     const matchesClass = !filters.roomClass || 
       (typeof room.room_class === 'object' ? room.room_class.value === filters.roomClass : room.room_class === filters.roomClass);
     
-    const matchesStatus = !filters.status || room.status === filters.status;
-    
     const matchesBuilding = !filters.building || room.building?.id === parseInt(filters.building);
     
     const matchesPrice = (!filters.priceFrom || room.price_per_night >= parseInt(filters.priceFrom)) &&
@@ -445,7 +486,12 @@ export default function RoomsPage() {
     const matchesCapacity = (!filters.capacityFrom || room.capacity >= parseInt(filters.capacityFrom)) &&
                            (!filters.capacityTo || room.capacity <= parseInt(filters.capacityTo));
 
-    return matchesSearch && matchesClass && matchesStatus && matchesBuilding && matchesPrice && matchesCapacity;
+    // Фильтр по номеру комнаты из URL
+    const urlParams = new URLSearchParams(window.location.search);
+    const roomNumber = urlParams.get('room');
+    const matchesRoomNumber = !roomNumber || room.number === roomNumber;
+
+    return matchesSearch && matchesClass && matchesBuilding && matchesPrice && matchesCapacity && matchesRoomNumber;
   });
 
   // Пагинация
@@ -459,9 +505,21 @@ export default function RoomsPage() {
     const total = rooms.length;
     const active = rooms.filter(r => r.is_active).length;
     const totalCapacity = rooms.reduce((sum, r) => sum + r.capacity, 0);
-    const totalRevenue = rooms.reduce((sum, r) => sum + r.price_per_night, 0);
     
-    return { total, active, totalCapacity, totalRevenue };
+    // Рассчитываем общую стоимость всех номеров
+    const totalValue = rooms.reduce((sum, r) => {
+      let price = r.price_per_night;
+      
+      // Если это строка, убираем пробелы и конвертируем
+      if (typeof price === 'string') {
+        price = parseFloat((price as string).replace(/\s/g, '').replace(',', '.'));
+      }
+      
+      const numPrice = typeof price === 'number' ? price : 0;
+      return sum + (numPrice && !isNaN(numPrice) ? numPrice : 0);
+    }, 0);
+    
+    return { total, active, totalCapacity, totalValue };
   };
 
   if (loading) {
@@ -507,6 +565,7 @@ export default function RoomsPage() {
           <div className="flex items-center gap-3">
             <button
               onClick={() => setShowFilters(!showFilters)}
+              data-filter-button
               className={`flex items-center gap-2 px-4 py-2 rounded-lg border transition-colors ${
                 showFilters 
                   ? 'bg-blue-50 border-blue-200 text-blue-700' 
@@ -530,7 +589,7 @@ export default function RoomsPage() {
               className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors"
             >
               <FaPlus />
-              Добавить
+              <span className="font-bold">Добавить</span>
             </button>
           </div>
         </div>
@@ -538,50 +597,52 @@ export default function RoomsPage() {
 
       {/* Статистика */}
       <div className="px-6 py-4">
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-          <div className="bg-white rounded-lg shadow-sm p-4 border border-gray-200">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 bg-blue-100 rounded-lg flex items-center justify-center">
-                <FaBed className="text-blue-600" />
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+          <div className="bg-gradient-to-br from-blue-50 to-blue-100 rounded-2xl shadow-lg p-6 border border-blue-200 hover:shadow-xl transition-all duration-300 group">
+            <div className="flex items-center gap-4">
+              <div className="w-12 h-12 bg-blue-500 rounded-xl flex items-center justify-center shadow-lg group-hover:scale-110 transition-transform">
+                <FaBed className="text-white text-xl" />
               </div>
               <div>
-                <p className="text-sm text-gray-600">Всего номеров</p>
-                <p className="text-2xl font-bold text-gray-900">{stats.total}</p>
+                <p className="text-sm text-blue-700 font-bold">Всего номеров</p>
+                <p className="text-3xl font-bold text-blue-900">{stats.total}</p>
               </div>
             </div>
           </div>
-          <div className="bg-white rounded-lg shadow-sm p-4 border border-gray-200">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 bg-green-100 rounded-lg flex items-center justify-center">
-                <FaCheckCircle className="text-green-600" />
+          
+          <div className="bg-gradient-to-br from-green-50 to-green-100 rounded-2xl shadow-lg p-6 border border-green-200 hover:shadow-xl transition-all duration-300 group">
+            <div className="flex items-center gap-4">
+              <div className="w-12 h-12 bg-green-500 rounded-xl flex items-center justify-center shadow-lg group-hover:scale-110 transition-transform">
+                <FaCheckCircle className="text-white text-xl" />
               </div>
               <div>
-                <p className="text-sm text-gray-600">Активных</p>
-                <p className="text-2xl font-bold text-gray-900">{stats.active}</p>
+                <p className="text-sm text-green-700 font-bold">Активных</p>
+                <p className="text-3xl font-bold text-green-900">{stats.active}</p>
               </div>
             </div>
           </div>
-          <div className="bg-white rounded-lg shadow-sm p-4 border border-gray-200">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 bg-purple-100 rounded-lg flex items-center justify-center">
-                <FaUsers className="text-purple-600" />
+          
+          <div className="bg-gradient-to-br from-purple-50 to-purple-100 rounded-2xl shadow-lg p-6 border border-purple-200 hover:shadow-xl transition-all duration-300 group">
+            <div className="flex items-center gap-4">
+              <div className="w-12 h-12 bg-purple-500 rounded-xl flex items-center justify-center shadow-lg group-hover:scale-110 transition-transform">
+                <FaUsers className="text-white text-xl" />
               </div>
               <div>
-                <p className="text-sm text-gray-600">Общая вместимость</p>
-                <p className="text-2xl font-bold text-gray-900">{stats.totalCapacity}</p>
+                <p className="text-sm text-purple-700 font-bold">Общая вместимость</p>
+                <p className="text-3xl font-bold text-purple-900">{stats.totalCapacity}</p>
               </div>
             </div>
           </div>
-          {/* Новый блок: Свободных номеров */}
-          <div className="bg-white rounded-lg shadow-sm p-4 border border-gray-200">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 bg-green-50 rounded-lg flex items-center justify-center">
-                <FaCheckCircle className="text-green-500" />
+          
+          <div className="bg-gradient-to-br from-orange-50 to-orange-100 rounded-2xl shadow-lg p-6 border border-orange-200 hover:shadow-xl transition-all duration-300 group">
+            <div className="flex items-center gap-4">
+              <div className="w-12 h-12 bg-orange-500 rounded-xl flex items-center justify-center shadow-lg group-hover:scale-110 transition-transform">
+                <FaMoneyBillWave className="text-white text-xl" />
               </div>
               <div>
-                <p className="text-sm text-gray-600">Свободных номеров</p>
-                <p className="text-2xl font-bold text-gray-900">
-                  {rooms.filter(r => r.status === 'free').length} из {stats.total}
+                <p className="text-sm text-orange-700 font-bold">Общая стоимость номеров</p>
+                <p className="text-3xl font-bold text-orange-900">
+                  {Math.round(stats.totalValue).toLocaleString()} сом
                 </p>
               </div>
             </div>
@@ -589,108 +650,91 @@ export default function RoomsPage() {
         </div>
       </div>
 
-      {/* Фильтры */}
-      {showFilters && (
-        <div className="px-6 py-4 bg-white border-b border-gray-200">
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Поиск</label>
-              <div className="relative">
-                <FaSearch className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" />
-                <input
-                  type="text"
-                  value={filters.search}
-                  onChange={(e) => setFilters(prev => ({ ...prev, search: e.target.value }))}
-                  className="w-full pl-10 pr-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                  placeholder="Номер, описание..."
-                />
-              </div>
-            </div>
-            
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Класс</label>
-              <select
-                value={filters.roomClass}
-                onChange={(e) => setFilters(prev => ({ ...prev, roomClass: e.target.value }))}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-              >
-                <option value="">Все классы</option>
-                {ROOM_CLASSES.map(cls => (
-                  <option key={cls.value} value={cls.value}>{cls.label}</option>
-                ))}
-              </select>
-            </div>
-            
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Статус</label>
-              <select
-                value={filters.status}
-                onChange={(e) => setFilters(prev => ({ ...prev, status: e.target.value }))}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-              >
-                <option value="">Все статусы</option>
-                {ROOM_STATUSES.map(status => (
-                  <option key={status.value} value={status.value}>{status.label}</option>
-                ))}
-              </select>
-            </div>
-            
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Здание</label>
-              <select
-                value={filters.building}
-                onChange={(e) => setFilters(prev => ({ ...prev, building: e.target.value }))}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-              >
-                <option value="">Все здания</option>
-                {buildings.map(building => (
-                  <option key={building.id} value={building.id}>{building.name}</option>
-                ))}
-              </select>
-            </div>
-            
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Цена</label>
-              <div className="flex gap-2">
-                <input
-                  type="number"
-                  value={filters.priceFrom}
-                  onChange={(e) => setFilters(prev => ({ ...prev, priceFrom: e.target.value }))}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                  placeholder="От"
-                />
-                <input
-                  type="number"
-                  value={filters.priceTo}
-                  onChange={(e) => setFilters(prev => ({ ...prev, priceTo: e.target.value }))}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                  placeholder="До"
-                />
-              </div>
-            </div>
-            
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Вместимость</label>
-              <div className="flex gap-2">
-                <input
-                  type="number"
-                  value={filters.capacityFrom}
-                  onChange={(e) => setFilters(prev => ({ ...prev, capacityFrom: e.target.value }))}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                  placeholder="От"
-                />
-                <input
-                  type="number"
-                  value={filters.capacityTo}
-                  onChange={(e) => setFilters(prev => ({ ...prev, capacityTo: e.target.value }))}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                  placeholder="До"
-                />
-              </div>
-            </div>
+      {/* Выдвижная панель фильтров */}
+      <div className={`fixed top-0 right-0 h-full w-full max-w-xs bg-white shadow-2xl z-50 transition-transform duration-300 filter-panel ${showFilters ? 'translate-x-0' : 'translate-x-full'}`} style={{minWidth: 320}}>
+        <div className="flex items-center justify-between p-4 border-b">
+          <h2 className="text-xl font-bold">Фильтры</h2>
+          <button onClick={() => setShowFilters(false)} className="text-gray-400 hover:text-gray-700 text-2xl font-bold focus:outline-none">×</button>
+        </div>
+        <div className="p-4 flex flex-col gap-4">
+          <label className="font-semibold">Поиск</label>
+          <div className="relative">
+            <input
+              type="text"
+              value={filters.search}
+              onChange={(e) => setFilters(prev => ({ ...prev, search: e.target.value }))}
+              className="w-full pl-3 pr-10 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              placeholder="Номер, описание..."
+            />
+            <FaSearch className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={14} />
+          </div>
+
+          <label className="font-semibold">Класс</label>
+          <select
+            value={filters.roomClass}
+            onChange={(e) => setFilters(prev => ({ ...prev, roomClass: e.target.value }))}
+            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+          >
+            <option value="">Все классы</option>
+            {ROOM_CLASSES.map(cls => (
+              <option key={cls.value} value={cls.value}>{cls.label}</option>
+            ))}
+          </select>
+
+          <label className="font-semibold">Здание</label>
+          <select
+            value={filters.building}
+            onChange={(e) => setFilters(prev => ({ ...prev, building: e.target.value }))}
+            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+          >
+            <option value="">Все здания</option>
+            {buildings.map(building => (
+              <option key={building.id} value={building.id}>{building.name}</option>
+            ))}
+          </select>
+
+          <label className="font-semibold">Цена от</label>
+          <input
+            type="number"
+            value={filters.priceFrom}
+            onChange={(e) => setFilters(prev => ({ ...prev, priceFrom: e.target.value }))}
+            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+            placeholder="От"
+          />
+
+          <label className="font-semibold">Цена до</label>
+          <input
+            type="number"
+            value={filters.priceTo}
+            onChange={(e) => setFilters(prev => ({ ...prev, priceTo: e.target.value }))}
+            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+            placeholder="До"
+          />
+
+          <label className="font-semibold">Вместимость от</label>
+          <input
+            type="number"
+            value={filters.capacityFrom}
+            onChange={(e) => setFilters(prev => ({ ...prev, capacityFrom: e.target.value }))}
+            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+            placeholder="От"
+          />
+
+          <label className="font-semibold">Вместимость до</label>
+          <input
+            type="number"
+            value={filters.capacityTo}
+            onChange={(e) => setFilters(prev => ({ ...prev, capacityTo: e.target.value }))}
+            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+            placeholder="До"
+          />
+
+          <div className="flex gap-2 mt-4">
+            <button type="button" onClick={() => setFilters({ search: '', roomClass: '', building: '', priceFrom: '', priceTo: '', capacityFrom: '', capacityTo: '' })} className="bg-gray-200 hover:bg-gray-300 text-gray-700 px-5 py-2 rounded font-semibold flex-1">Сбросить</button>
+            <button type="button" onClick={() => setShowFilters(false)} className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-2 rounded font-semibold shadow flex-1">Применить</button>
           </div>
         </div>
-      )}
+      </div>
 
       {/* Контент */}
       <div className="px-6 py-6">
@@ -699,12 +743,12 @@ export default function RoomsPage() {
             <FaBed className="text-gray-400 text-6xl mx-auto mb-4" />
             <h3 className="text-lg font-medium text-gray-900 mb-2">Нет номеров</h3>
             <p className="text-gray-500 mb-4">
-              {filters.search || filters.roomClass || filters.status || filters.building || filters.priceFrom || filters.capacityFrom
+              {filters.search || filters.roomClass || filters.building || filters.priceFrom || filters.capacityFrom
                 ? 'Попробуйте изменить фильтры'
                 : 'Добавьте первый номер'
               }
             </p>
-            {!filters.search && !filters.roomClass && !filters.status && !filters.building && !filters.priceFrom && !filters.capacityFrom && (
+            {!filters.search && !filters.roomClass && !filters.building && !filters.priceFrom && !filters.capacityFrom && (
               <button
                 onClick={() => setShowModal(true)}
                 className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors mx-auto"
@@ -727,18 +771,24 @@ export default function RoomsPage() {
                       className='rounded border-gray-300 text-blue-600 focus:ring-blue-500'
                     />
                   </th>
-                  <th className='p-3 text-center'>Номер</th>
-                  <th className='p-3 text-center'>Здание</th>
-                  <th className='p-3 text-center'>Класс</th>
-                  <th className='p-3 text-center'>Вместимость</th>
-                  <th className='p-3 text-center'>Статус</th>
-                  <th className='p-3 text-center'>Цена</th>
-                  <th className='p-3 text-center'>Действия</th>
+                              <th className='p-3 text-center font-bold'>Номер</th>
+            <th className='p-3 text-center font-bold'>Здание</th>
+            <th className='p-3 text-center font-bold'>Класс</th>
+            <th className='p-3 text-center font-bold'>Вместимость</th>
+            <th className='p-3 text-center font-bold'>Комнат</th>
+            <th className='p-3 text-center font-bold'>Удобства</th>
+            <th className='p-3 text-center font-bold'>Цена</th>
+            <th className='p-3 text-center font-bold'>Действия</th>
                 </tr>
               </thead>
               <tbody>
-                {paginatedRooms.map((room, idx) => (
-                  <tr key={room.id} className={`transition-all border-b last:border-b-0 ${idx % 2 === 1 ? 'bg-gray-50' : 'bg-white'} hover:bg-blue-50`}>
+                {paginatedRooms.map((room, idx) => {
+                  const urlParams = new URLSearchParams(window.location.search);
+                  const roomNumber = urlParams.get('room');
+                  const isHighlighted = roomNumber && room.number === roomNumber;
+                  
+                  return (
+                    <tr key={room.id} className={`transition-all border-b last:border-b-0 ${idx % 2 === 1 ? 'bg-gray-50' : 'bg-white'} hover:bg-blue-50 ${isHighlighted ? 'bg-yellow-100 animate-pulse' : ''}`}>
                     <td className='p-3 text-left'>
                       <input
                         type='checkbox'
@@ -748,8 +798,12 @@ export default function RoomsPage() {
                       />
                     </td>
                     <td className='p-3 text-center'>
-                      <span className='font-medium text-gray-900'>{room.number}</span>
-                      <div className='text-xs text-gray-500'>ID: {room.id}</div>
+                      <HighlightedText 
+                        text={room.number} 
+                        searchQuery={filters.search} 
+                        className='font-medium text-gray-900' 
+                      />
+                                              <div className='text-xs text-gray-500'>#{room.id}</div>
                     </td>
                     <td className='p-3 text-center'>
                       <span className='text-sm'>{room.building?.name || '—'}</span>
@@ -784,32 +838,14 @@ export default function RoomsPage() {
                       </span>
                     </td>
                     <td className='p-3 text-center'>
-                      <select
-                        className={`min-w-0 px-2 py-1 text-xs font-medium rounded border border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 ${ROOM_STATUSES.find(s => s.value === room.status)?.color || 'bg-gray-100 text-gray-800'}`}
-                        style={{ height: 28, maxWidth: 120 }}
-                        value={room.status}
-                        onChange={async (e) => {
-                          const newStatus = e.target.value;
-                          try {
-                            const token = localStorage.getItem('access');
-                            const res = await fetch(`${API_URL}/api/rooms/${room.id}/`, {
-                              method: 'PATCH',
-                              headers: {
-                                'Content-Type': 'application/json',
-                                'Authorization': `Bearer ${token}`,
-                              },
-                              body: JSON.stringify({ status: newStatus }),
-                            });
-                            if (res.ok) {
-                              setRooms(prev => prev.map(r => r.id === room.id ? { ...r, status: newStatus } : r));
-                            }
-                          } catch {}
-                        }}
-                      >
-                        {ROOM_STATUSES.map(status => (
-                          <option key={status.value} value={status.value}>{status.label}</option>
-                        ))}
-                      </select>
+                      <span className='text-sm font-medium text-gray-700'>
+                        {room.rooms_count || 1}
+                      </span>
+                    </td>
+                    <td className='p-3 text-center'>
+                      <span className='text-xs text-gray-600 max-w-[150px] truncate block' title={room.amenities || 'Нет удобств'}>
+                        {room.amenities ? (room.amenities.length > 20 ? `${room.amenities.substring(0, 20)}...` : room.amenities) : '—'}
+                      </span>
                     </td>
                     <td className='p-3 text-center'>
                       <span className='font-medium text-green-600'>
@@ -835,7 +871,8 @@ export default function RoomsPage() {
                       </div>
                     </td>
                   </tr>
-                ))}
+                );
+              })}
               </tbody>
             </table>
           </div>
@@ -905,6 +942,17 @@ export default function RoomsPage() {
           setShowConfirmDelete(false);
           setDeleteTarget(null);
         }}
+      />
+
+      {/* Модальное окно подтверждения экспорта */}
+      <ExportConfirmModal
+        open={showExportModal}
+        onClose={() => setShowExportModal(false)}
+        onConfirm={handleExportConfirm}
+        title="Экспорт номеров"
+        description={`Экспорт ${filteredRooms.length} номеров в CSV файл`}
+        fileName={`номера_${new Date().toISOString().split('T')[0]}.csv`}
+        loading={exportLoading}
       />
     </div>
   );

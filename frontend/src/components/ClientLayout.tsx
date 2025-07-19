@@ -5,6 +5,7 @@ import SidebarDrawer from './SidebarDrawer';
 import Header from './Header';
 import { usePathname } from 'next/navigation';
 import ProtectedRoute from './ProtectedRoute';
+import ToastContainer from './Toast';
 import { useState } from 'react';
 
 export default function ClientLayout({ children }: { children: React.ReactNode }) {
@@ -31,6 +32,7 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
           <main className="flex-1 overflow-auto">{children}</main>
         </div>
       </div>
+      <ToastContainer />
     </ProtectedRoute>
   );
 } 

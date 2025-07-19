@@ -1,8 +1,13 @@
 "use client";
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import { API_URL } from "../../shared/api";
 import { saveAs } from "file-saver";
-import { FaFileCsv, FaFilter, FaSearch, FaCalendarAlt, FaBed, FaUsers, FaMoneyBillWave, FaChartLine, FaDownload, FaEye } from "react-icons/fa";
+import { useSearchParams } from "next/navigation";
+import { FaFileCsv, FaFilter, FaSearch, FaCalendarAlt, FaBed, FaUsers, FaMoneyBillWave, FaChartLine, FaDownload, FaEye, FaTimesCircle } from "react-icons/fa";
+import StatusBadge from '../../components/StatusBadge';
+import Button from '../../components/Button';
+import LoadingSpinner from '../../components/LoadingSpinner';
+import HighlightedText from '../../components/HighlightedText';
 import Pagination from '../../components/Pagination';
 
 interface Building {
@@ -59,6 +64,7 @@ const BOOKING_STATUSES = [
 ];
 
 export default function ReportsPage() {
+  const searchParams = useSearchParams();
   const [bookings, setBookings] = useState<Booking[]>([]);
   const [rooms, setRooms] = useState<Room[]>([]);
   const [guests, setGuests] = useState<Guest[]>([]);
@@ -67,7 +73,7 @@ export default function ReportsPage() {
   const [error, setError] = useState('');
   const [showFilters, setShowFilters] = useState(false);
   const [filters, setFilters] = useState({
-    search: '',
+    search: searchParams.get('search') || '',
     dateFrom: '',
     dateTo: '',
     room: '',
@@ -88,6 +94,22 @@ export default function ReportsPage() {
     
     fetchData();
   }, [token]);
+
+  // Фильтры: закрытие по клику вне
+  const filterPanelRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    function handleClickOutside(e: MouseEvent) {
+      if (showFilters && filterPanelRef.current && !filterPanelRef.current.contains(e.target as Node)) {
+        setShowFilters(false);
+      }
+    }
+    if (showFilters) {
+      document.addEventListener('mousedown', handleClickOutside);
+    } else {
+      document.removeEventListener('mousedown', handleClickOutside);
+    }
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [showFilters]);
 
   const fetchData = async () => {
     try {
@@ -229,17 +251,29 @@ export default function ReportsPage() {
     const total = bookings.length;
     const active = bookings.filter(b => b.status === 'active').length;
     const completed = bookings.filter(b => b.status === 'completed').length;
-    const totalRevenue = bookings.reduce((sum, b) => sum + (b.total_amount || 0), 0);
+    const totalRevenue = bookings.reduce((sum, b) => {
+      // Проверяем все возможные поля с суммой
+      let amount = b.total_amount || (b as any).price || b.price_per_night || 0;
+      
+      // Если это строка, убираем пробелы и конвертируем
+      if (typeof amount === 'string') {
+        amount = amount.replace(/\s/g, '').replace(',', '.');
+      }
+      
+      const numAmount = typeof amount === 'string' ? parseFloat(amount) : amount;
+      const validAmount = typeof numAmount === 'number' && !isNaN(numAmount) ? numAmount : 0;
+      
+      return sum + validAmount;
+    }, 0);
     
     return { total, active, completed, totalRevenue };
   };
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center h-64">
+      <div className="flex items-center justify-center h-full">
         <div className="text-center">
-          <div className="w-8 h-8 border-4 border-blue-600 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
-          <p className="text-gray-600">Загрузка отчётов...</p>
+          <LoadingSpinner size="lg" text="Загрузка отчётов..." />
         </div>
       </div>
     );
@@ -247,14 +281,20 @@ export default function ReportsPage() {
 
   if (error) {
     return (
-      <div className="text-center p-8">
-        <p className="text-red-600 mb-4">{error}</p>
-        <button 
+      <div className="flex items-center justify-center h-full">
+        <div className="text-center">
+          <div className="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4">
+            <FaTimesCircle className="text-red-600 text-2xl" />
+          </div>
+          <p className="text-red-600 mb-4 text-lg font-medium">{error}</p>
+          <Button
+            variant="primary"
           onClick={fetchData}
-          className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+            icon={<FaChartLine />}
         >
           Попробовать снова
-        </button>
+          </Button>
+        </div>
       </div>
     );
   }
@@ -275,178 +315,81 @@ export default function ReportsPage() {
           </div>
           
           <div className="flex items-center gap-3">
-            <button
+            <Button
+              variant={showFilters ? "primary" : "ghost"}
               onClick={() => setShowFilters(!showFilters)}
-              className={`flex items-center gap-2 px-4 py-2 rounded-lg border transition-colors ${
-                showFilters 
-                  ? 'bg-blue-50 border-blue-200 text-blue-700' 
-                  : 'bg-white border-gray-300 text-gray-700 hover:bg-gray-50'
-              }`}
+              icon={<FaFilter />}
+              className={showFilters ? "shadow-lg" : ""}
             >
-              <FaFilter />
               Фильтры
-            </button>
+            </Button>
             
-            <button
+            <Button
+              variant="success"
               onClick={exportToCSV}
-              className="flex items-center gap-2 px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg transition-colors"
+              icon={<FaDownload />}
+              className="shadow-lg hover:shadow-xl"
             >
-              <FaDownload />
               Экспорт CSV
-            </button>
+            </Button>
           </div>
         </div>
       </div>
 
       {/* Статистика */}
       <div className="px-6 py-4">
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-          <div className="bg-white rounded-lg shadow-sm p-4 border border-gray-200">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 bg-blue-100 rounded-lg flex items-center justify-center">
-                <FaChartLine className="text-blue-600" />
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+          <div className="bg-gradient-to-br from-blue-50 to-blue-100 rounded-2xl shadow-lg p-6 border border-blue-200 hover:shadow-xl transition-all duration-300 group">
+            <div className="flex items-center gap-4">
+              <div className="w-12 h-12 bg-blue-500 rounded-xl flex items-center justify-center shadow-lg group-hover:scale-110 transition-transform">
+                <FaChartLine className="text-white text-xl" />
               </div>
               <div>
-                <p className="text-sm text-gray-600">Всего бронирований</p>
-                <p className="text-2xl font-bold text-gray-900">{stats.total}</p>
+                <p className="text-sm text-blue-700 font-bold">Всего бронирований</p>
+                <p className="text-3xl font-bold text-blue-900">{stats.total}</p>
               </div>
             </div>
           </div>
           
-          <div className="bg-white rounded-lg shadow-sm p-4 border border-gray-200">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 bg-green-100 rounded-lg flex items-center justify-center">
-                <FaBed className="text-green-600" />
+          <div className="bg-gradient-to-br from-green-50 to-green-100 rounded-2xl shadow-lg p-6 border border-green-200 hover:shadow-xl transition-all duration-300 group">
+            <div className="flex items-center gap-4">
+              <div className="w-12 h-12 bg-green-500 rounded-xl flex items-center justify-center shadow-lg group-hover:scale-110 transition-transform">
+                <FaBed className="text-white text-xl" />
               </div>
               <div>
-                <p className="text-sm text-gray-600">Активных</p>
-                <p className="text-2xl font-bold text-gray-900">{stats.active}</p>
+                <p className="text-sm text-green-700 font-bold">Активных</p>
+                <p className="text-3xl font-bold text-green-900">{stats.active}</p>
               </div>
             </div>
           </div>
           
-          <div className="bg-white rounded-lg shadow-sm p-4 border border-gray-200">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 bg-blue-100 rounded-lg flex items-center justify-center">
-                <FaUsers className="text-blue-600" />
+          <div className="bg-gradient-to-br from-purple-50 to-purple-100 rounded-2xl shadow-lg p-6 border border-purple-200 hover:shadow-xl transition-all duration-300 group">
+            <div className="flex items-center gap-4">
+              <div className="w-12 h-12 bg-purple-500 rounded-xl flex items-center justify-center shadow-lg group-hover:scale-110 transition-transform">
+                <FaUsers className="text-white text-xl" />
               </div>
               <div>
-                <p className="text-sm text-gray-600">Завершённых</p>
-                <p className="text-2xl font-bold text-gray-900">{stats.completed}</p>
+                <p className="text-sm text-purple-700 font-bold">Завершённых</p>
+                <p className="text-3xl font-bold text-purple-900">{stats.completed}</p>
               </div>
             </div>
           </div>
           
-          <div className="bg-white rounded-lg shadow-sm p-4 border border-gray-200">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 bg-green-100 rounded-lg flex items-center justify-center">
-                <FaMoneyBillWave className="text-green-600" />
+          <div className="bg-gradient-to-br from-orange-50 to-orange-100 rounded-2xl shadow-lg p-6 border border-orange-200 hover:shadow-xl transition-all duration-300 group">
+            <div className="flex items-center gap-4">
+              <div className="w-12 h-12 bg-orange-500 rounded-xl flex items-center justify-center shadow-lg group-hover:scale-110 transition-transform">
+                <FaMoneyBillWave className="text-white text-xl" />
               </div>
               <div>
-                <p className="text-sm text-gray-600">Общая выручка</p>
-                <p className="text-2xl font-bold text-gray-900">{stats.totalRevenue.toLocaleString()} сом</p>
+                <p className="text-sm text-orange-700 font-bold">Общая выручка</p>
+                <p className="text-3xl font-bold text-orange-900">{Math.round(stats.totalRevenue).toLocaleString()} сом</p>
               </div>
             </div>
           </div>
         </div>
       </div>
 
-      {/* Фильтры */}
-      {showFilters && (
-        <div className="px-6 py-4 bg-white border-b border-gray-200">
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Поиск</label>
-              <div className="relative">
-                <FaSearch className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" />
-                <input
-                  type="text"
-                  value={filters.search}
-                  onChange={(e) => setFilters(prev => ({ ...prev, search: e.target.value }))}
-                  className="w-full pl-10 pr-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                  placeholder="Гость, телефон, ИНН, номер..."
-                />
-              </div>
-            </div>
-            
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Дата заезда</label>
-              <input
-                type="date"
-                value={filters.dateFrom}
-                onChange={(e) => setFilters(prev => ({ ...prev, dateFrom: e.target.value }))}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-              />
-            </div>
-            
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Дата выезда</label>
-              <input
-                type="date"
-                value={filters.dateTo}
-                onChange={(e) => setFilters(prev => ({ ...prev, dateTo: e.target.value }))}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-              />
-            </div>
-            
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Статус</label>
-              <select
-                value={filters.status}
-                onChange={(e) => setFilters(prev => ({ ...prev, status: e.target.value }))}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-              >
-                <option value="">Все статусы</option>
-                {BOOKING_STATUSES.map(status => (
-                  <option key={status.value} value={status.value}>{status.label}</option>
-                ))}
-              </select>
-            </div>
-            
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Номер</label>
-              <select
-                value={filters.room}
-                onChange={(e) => setFilters(prev => ({ ...prev, room: e.target.value }))}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-              >
-                <option value="">Все номера</option>
-                {rooms.map(r => (
-                  <option key={r.id} value={r.id}>№{r.number}</option>
-                ))}
-              </select>
-            </div>
-            
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Гость</label>
-              <select
-                value={filters.guest}
-                onChange={(e) => setFilters(prev => ({ ...prev, guest: e.target.value }))}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-              >
-                <option value="">Все гости</option>
-                {guests.map(g => (
-                  <option key={g.id} value={g.id}>{g.full_name}</option>
-                ))}
-              </select>
-            </div>
-            
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Здание</label>
-              <select
-                value={filters.building}
-                onChange={(e) => setFilters(prev => ({ ...prev, building: e.target.value }))}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-              >
-                <option value="">Все здания</option>
-                {buildings.map(b => (
-                  <option key={b.id} value={b.id}>{b.name}</option>
-                ))}
-              </select>
-            </div>
-          </div>
-        </div>
-      )}
+
 
       {/* Контент */}
       <div className="px-6 py-6">
@@ -466,18 +409,18 @@ export default function ReportsPage() {
             <table className='w-full text-sm'>
               <thead className="bg-gray-50 border-b border-gray-200">
                 <tr className="bg-gray-50 text-gray-700">
-                  <th className="p-3 text-center">ID</th>
-                  <th className="p-3 text-center">Номер</th>
-                  <th className="p-3 text-center">Здание</th>
-                  <th className="p-3 text-center">Класс</th>
-                  <th className="p-3 text-center">Статус</th>
-                  <th className="p-3 text-center">Гость</th>
-                  <th className="p-3 text-center">Телефон</th>
-                  <th className="p-3 text-center">Заезд</th>
-                  <th className="p-3 text-center">Выезд</th>
-                  <th className="p-3 text-center">Гости</th>
-                  <th className="p-3 text-center">Оплачено</th>
-                  <th className="p-3 text-center">Цена</th>
+                              <th className="p-3 text-center font-bold">ID</th>
+            <th className="p-3 text-center font-bold">Номер</th>
+            <th className="p-3 text-center font-bold">Здание</th>
+            <th className="p-3 text-center font-bold">Класс</th>
+            <th className="p-3 text-center font-bold">Статус</th>
+            <th className="p-3 text-center font-bold">Гость</th>
+            <th className="p-3 text-center font-bold">Телефон</th>
+            <th className="p-3 text-center font-bold">Заезд</th>
+            <th className="p-3 text-center font-bold">Выезд</th>
+            <th className="p-3 text-center font-bold">Гости</th>
+            <th className="p-3 text-center font-bold">Оплачено</th>
+            <th className="p-3 text-center font-bold">Цена</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-200">
@@ -514,7 +457,11 @@ export default function ReportsPage() {
                       </td>
                       <td className="p-3 text-center">
                         <div>
-                          <div className="font-medium text-gray-900">{b.guest.full_name}</div>
+                          <HighlightedText 
+                            text={b.guest.full_name} 
+                            searchQuery={filters.search} 
+                            className="font-medium text-gray-900" 
+                          />
                           <div className="text-sm text-gray-500">{b.guest.inn || '—'}</div>
                         </div>
                       </td>
@@ -567,6 +514,96 @@ export default function ReportsPage() {
           </div>
         </div>
       )}
+
+      {/* Выдвижная панель фильтров */}
+      <div className={`fixed top-0 right-0 h-full w-full max-w-xs bg-white shadow-2xl z-50 transition-transform duration-300 ${showFilters ? 'translate-x-0' : 'translate-x-full'}`} style={{minWidth: 320}} ref={filterPanelRef}>
+        <div className="flex items-center justify-between p-4 border-b">
+          <h2 className="text-xl font-bold">Фильтры</h2>
+          <button onClick={() => setShowFilters(false)} className="text-gray-400 hover:text-gray-700 text-2xl font-bold focus:outline-none">×</button>
+        </div>
+        <div className="p-4 flex flex-col gap-4">
+          <label className="font-semibold">Поиск</label>
+          <div className="relative">
+            <input
+              type="text"
+              value={filters.search}
+              onChange={(e) => setFilters(prev => ({ ...prev, search: e.target.value }))}
+              className="w-full pl-3 pr-10 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              placeholder="Гость, телефон, ИНН, номер..."
+            />
+            <FaSearch className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={14} />
+          </div>
+
+          <label className="font-semibold">Дата заезда</label>
+          <input
+            type="date"
+            value={filters.dateFrom}
+            onChange={(e) => setFilters(prev => ({ ...prev, dateFrom: e.target.value }))}
+            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+          />
+
+          <label className="font-semibold">Дата выезда</label>
+          <input
+            type="date"
+            value={filters.dateTo}
+            onChange={(e) => setFilters(prev => ({ ...prev, dateTo: e.target.value }))}
+            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+          />
+
+          <label className="font-semibold">Статус</label>
+          <select
+            value={filters.status}
+            onChange={(e) => setFilters(prev => ({ ...prev, status: e.target.value }))}
+            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+          >
+            <option value="">Все статусы</option>
+            {BOOKING_STATUSES.map(status => (
+              <option key={status.value} value={status.value}>{status.label}</option>
+            ))}
+          </select>
+
+          <label className="font-semibold">Номер</label>
+          <select
+            value={filters.room}
+            onChange={(e) => setFilters(prev => ({ ...prev, room: e.target.value }))}
+            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+          >
+            <option value="">Все номера</option>
+            {rooms.map(r => (
+              <option key={r.id} value={r.id}>№{r.number}</option>
+            ))}
+          </select>
+
+          <label className="font-semibold">Гость</label>
+          <select
+            value={filters.guest}
+            onChange={(e) => setFilters(prev => ({ ...prev, guest: e.target.value }))}
+            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+          >
+            <option value="">Все гости</option>
+            {guests.map(g => (
+              <option key={g.id} value={g.id}>{g.full_name}</option>
+            ))}
+          </select>
+
+          <label className="font-semibold">Здание</label>
+          <select
+            value={filters.building}
+            onChange={(e) => setFilters(prev => ({ ...prev, building: e.target.value }))}
+            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+          >
+            <option value="">Все здания</option>
+            {buildings.map(b => (
+              <option key={b.id} value={b.id}>{b.name}</option>
+            ))}
+          </select>
+
+          <div className="flex gap-2 mt-4">
+            <button type="button" onClick={() => setFilters({ search: '', dateFrom: '', dateTo: '', room: '', guest: '', status: '', building: '' })} className="bg-gray-200 hover:bg-gray-300 text-gray-700 px-5 py-2 rounded font-semibold flex-1">Сбросить</button>
+            <button type="button" onClick={() => setShowFilters(false)} className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-2 rounded font-semibold shadow flex-1">Применить</button>
+          </div>
+        </div>
+      </div>
     </div>
   );
 } 

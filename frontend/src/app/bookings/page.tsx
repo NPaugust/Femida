@@ -2,8 +2,14 @@
 
 import React, { useEffect, useState, useRef } from 'react';
 import { FaPlus, FaEdit, FaTrash, FaFilter, FaFileCsv, FaList, FaCalendarAlt, FaStream, FaSpinner } from 'react-icons/fa';
+import StatusBadge from '../../components/StatusBadge';
+import Button from '../../components/Button';
+import LoadingSpinner from '../../components/LoadingSpinner';
+import ExportConfirmModal from '../../components/ExportConfirmModal';
+import HighlightedText from '../../components/HighlightedText';
 import { API_URL } from '../../shared/api';
 import { useApi } from '../../shared/hooks/useApi';
+import { useSearchParams } from 'next/navigation';
 import ReactSelect from 'react-select';
 import DatePicker from 'react-datepicker';
 import 'react-datepicker/dist/react-datepicker.css';
@@ -19,6 +25,8 @@ interface Room {
   number: string;
   room_class: string | { value: string; label: string };
   capacity: number; // добавлено поле вместимости
+  price_per_night?: number;
+  building?: { id: number; name: string };
 }
 interface Booking {
   id: number;
@@ -47,7 +55,8 @@ const STATUS_COLORS: Record<string, string> = {
 const STATUS_LABELS: Record<string, string> = {
   active: 'Активный',
   completed: 'Завершён',
-  cancelled: 'Недоступен',
+  cancelled: 'Отменён',
+  pending: 'Ожидает',
 };
 
 const TABS = [
@@ -68,6 +77,12 @@ const PAYMENT_STATUSES = [
   { value: 'unpaid', label: 'Не оплачено' },
 ];
 
+const PAYMENT_METHODS = [
+  { value: 'cash', label: 'Наличные' },
+  { value: 'card', label: 'Карта' },
+  { value: 'transfer', label: 'Перевод' },
+];
+
 interface BookingModalProps {
   open: boolean;
   onClose: () => void;
@@ -86,6 +101,9 @@ function BookingModal({ open, onClose, onSave, guests, rooms, initial }: Booking
     check_out: initial?.check_out ? initial.check_out.slice(0, 10) : '',
     people_count: initial?.people_count || 1,
     comments: initial?.comments || '',
+    payment_method: initial?.payment_method || 'cash',
+    price_per_night: initial?.price_per_night || 0,
+    prepayment: initial?.prepayment || 0,
   });
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
@@ -129,6 +147,9 @@ function BookingModal({ open, onClose, onSave, guests, rooms, initial }: Booking
         check_out: checkOutDate ? formatTz(checkOutDate, 'yyyy-MM-dd', { timeZone: TIMEZONE }) : '',
         people_count: initial.people_count || 1,
         comments: initial.comments || '',
+        payment_method: initial.payment_method || 'cash',
+        price_per_night: initial.price_per_night || 0,
+        prepayment: initial.prepayment || 0,
       });
       setCheckInTime(checkInDate ? formatTz(checkInDate, 'HH:mm', { timeZone: TIMEZONE }) : '00:00');
       setCheckOutTime(checkOutDate ? formatTz(checkOutDate, 'HH:mm', { timeZone: TIMEZONE }) : '00:00');
@@ -142,6 +163,9 @@ function BookingModal({ open, onClose, onSave, guests, rooms, initial }: Booking
         check_out: '',
         people_count: 1,
         comments: '',
+        payment_method: 'cash',
+        price_per_night: 0,
+        prepayment: 0,
       });
       setCheckInTime('00:00');
       setCheckOutTime('00:00');
@@ -182,6 +206,9 @@ function BookingModal({ open, onClose, onSave, guests, rooms, initial }: Booking
             check_out,
             people_count: form.people_count,
             comments: form.comments,
+            payment_method: form.payment_method,
+            price_per_night: form.price_per_night,
+            prepayment: form.prepayment,
           }),
         });
       } else {
@@ -199,6 +226,9 @@ function BookingModal({ open, onClose, onSave, guests, rooms, initial }: Booking
             check_out,
             people_count: form.people_count,
             comments: form.comments,
+            payment_method: form.payment_method,
+            price_per_night: form.price_per_night,
+            prepayment: form.prepayment,
           }),
         });
       }
@@ -206,7 +236,20 @@ function BookingModal({ open, onClose, onSave, guests, rooms, initial }: Booking
         onSave(form); // Для обновления списка
         onClose();
       } else {
+        const errorData = await res.json();
+        if (errorData.detail) {
+          setError(`Ошибка: ${errorData.detail}`);
+        } else if (errorData.non_field_errors) {
+          setError(`Ошибка: ${errorData.non_field_errors.join(', ')}`);
+        } else if (errorData.room_id) {
+          setError(`Ошибка номера: ${errorData.room_id.join(', ')}`);
+        } else if (errorData.check_in) {
+          setError(`Ошибка даты заезда: ${errorData.check_in.join(', ')}`);
+        } else if (errorData.check_out) {
+          setError(`Ошибка даты выезда: ${errorData.check_out.join(', ')}`);
+      } else {
         setError('Ошибка при сохранении. Проверьте данные.');
+        }
       }
     } catch {
       setError('Ошибка сети.');
@@ -246,7 +289,9 @@ function BookingModal({ open, onClose, onSave, guests, rooms, initial }: Booking
           <select className="input w-full" value={form.room_id} onChange={e => setForm(f => ({ ...f, room_id: e.target.value }))} required>
             <option value="">Выберите номер</option>
             {rooms.filter(r => r.capacity >= form.people_count).map(r => (
-              <option key={r.id} value={r.id}>{r.number} (вместимость: {r.capacity})</option>
+              <option key={r.id} value={r.id}>
+                {r.number} • {r.building?.name || 'Неизвестное здание'} • Вместимость: {r.capacity}
+              </option>
             ))}
           </select>
 
@@ -340,8 +385,35 @@ function BookingModal({ open, onClose, onSave, guests, rooms, initial }: Booking
             </div>
           </div>
 
-          <label className="font-semibold md:text-right md:pr-2 flex items-center">Комментарий:</label>
-          <textarea className="input w-full md:col-span-1" rows={2} value={form.comments} onChange={e => setForm(f => ({ ...f, comments: e.target.value }))} />
+
+
+          <label className="font-semibold md:text-right md:pr-2 flex items-center">Способ оплаты:</label>
+          <select className="input w-full" value={form.payment_method} onChange={e => setForm(f => ({ ...f, payment_method: e.target.value }))}>
+            {PAYMENT_METHODS.map(opt => <option key={opt.value} value={opt.value}>{opt.label}</option>)}
+          </select>
+
+          {/* Расчет стоимости за период */}
+          {form.check_in && form.check_out && form.room_id && (
+            <>
+              <label className="font-semibold md:text-right md:pr-2 flex items-center">Количество дней:</label>
+              <div className="text-sm text-gray-600 flex items-center">
+                {Math.ceil((new Date(form.check_out).getTime() - new Date(form.check_in).getTime()) / (1000 * 60 * 60 * 24))} дней
+              </div>
+
+              <label className="font-semibold md:text-right md:pr-2 flex items-center">Стоимость за период:</label>
+              <div className="text-sm font-semibold text-green-600 flex items-center">
+                {(() => {
+                  const selectedRoom = rooms.find(r => r.id === parseInt(form.room_id));
+                  if (selectedRoom && form.check_in && form.check_out) {
+                    const days = Math.ceil((new Date(form.check_out).getTime() - new Date(form.check_in).getTime()) / (1000 * 60 * 60 * 24));
+                    const pricePerNight = selectedRoom.price_per_night || 0;
+                    return Math.round(pricePerNight * days).toLocaleString() + ' сом';
+                  }
+                  return '—';
+                })()}
+              </div>
+            </>
+          )}
 
           {/* Кнопки */}
           <div className="md:col-span-2 flex justify-end gap-3 mt-6">
@@ -365,6 +437,21 @@ function formatDateTime(dt: string) {
   const hours = d.getHours().toString().padStart(2, '0');
   const minutes = d.getMinutes().toString().padStart(2, '0');
   return `${day}.${month}.${year}, ${hours}:${minutes}`;
+}
+
+// Функция для автоматического определения статуса бронирования
+function getBookingStatus(booking: Booking): string {
+  const now = new Date();
+  const checkIn = new Date(booking.check_in);
+  const checkOut = new Date(booking.check_out);
+  
+  if (now < checkIn) {
+    return 'pending'; // Ожидает заезда
+  } else if (now >= checkIn && now <= checkOut) {
+    return 'active'; // Активно (гость в номере)
+  } else {
+    return 'completed'; // Завершено (гость выехал)
+  }
 }
 
 // Toast-уведомления
@@ -402,6 +489,7 @@ function TooltipOnClick({ content, children }: { content: string, children: Reac
 
 export default function BookingsPage() {
   const { handleApiRequestWithAuth } = useApi();
+  const searchParams = useSearchParams();
   const [bookings, setBookings] = useState<Booking[]>([]);
   const [guests, setGuests] = useState<Guest[]>([]);
   const [rooms, setRooms] = useState<Room[]>([]);
@@ -415,6 +503,7 @@ export default function BookingsPage() {
   const [deleting, setDeleting] = useState(false);
   const [showFilters, setShowFilters] = useState(false);
   const [filters, setFilters] = useState({
+    search: searchParams.get('search') || '',
     status: '',
     room_id: '',
     guest_id: '',
@@ -424,6 +513,8 @@ export default function BookingsPage() {
   const toastTimeout = useRef<NodeJS.Timeout | null>(null);
   const [activeRow, setActiveRow] = useState<number | null>(null);
   const [view, setView] = useState<'list' | 'table' | 'calendar'>('list');
+  const [showExportModal, setShowExportModal] = useState(false);
+  const [exportLoading, setExportLoading] = useState(false);
 
   // Пагинация
   const [currentPage, setCurrentPage] = useState(1);
@@ -469,6 +560,23 @@ export default function BookingsPage() {
     // Вкладки
     if (activeTab === 'upcoming' && new Date(b.check_in) <= now) return false;
     if (activeTab === 'past' && new Date(b.check_out) >= now) return false;
+    
+    // Фильтр по статусу оплаты из URL
+    const urlParams = new URLSearchParams(window.location.search);
+    const paymentStatus = urlParams.get('payment_status');
+    const filterType = urlParams.get('filter');
+    const bookingId = urlParams.get('bookingId');
+    const roomNumber = urlParams.get('room');
+    
+    if (paymentStatus === 'pending' && filterType === 'unpaid' && b.payment_status === 'paid') return false;
+    if (paymentStatus === 'paid' && b.payment_status !== 'paid') return false;
+    
+    // Фильтр по конкретному бронированию
+    if (bookingId && b.id !== parseInt(bookingId)) return false;
+    
+    // Фильтр по номеру комнаты
+    if (roomNumber && (typeof b.room === 'object' ? b.room.number : b.room) !== roomNumber) return false;
+    
     // Фильтры
     if (filters.status && b.status !== filters.status) return false;
     if (filters.room_id && b.room && String(b.room.id) !== filters.room_id) return false;
@@ -479,54 +587,65 @@ export default function BookingsPage() {
 
   // Экспорт для текущего вида
   function exportToCSV() {
-    if (view === 'calendar') {
-      // Календарь: экспортируем список бронирований за месяц
-      const csvRows = [
-        ['ID', 'Тип номера', 'Номер', 'Заезд', 'Выезд', 'Гость', 'Статус'],
-        ...filtered.map(b => [
-          b.id,
-          typeof b.room.room_class === 'object' ? b.room.room_class.label : b.room.room_class,
-          b.room.number,
-          formatDateTime(b.check_in),
-          formatDateTime(b.check_out),
-          b.guest?.full_name || '',
-          STATUS_LABELS[b.status] || b.status
-        ])
-      ];
-      const csv = csvRows.map(row => row.map(String).map(v => `"${v.replace(/"/g, '""')}"`).join(',')).join('\n');
-      const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
-      const link = document.createElement('a');
-      link.href = URL.createObjectURL(blob);
-      link.setAttribute('download', 'bookings-calendar.csv');
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-      setToast({ message: 'Экспорт завершён', type: 'success' });
-    } else {
-      // Классическая таблица: экспортируем список бронирований
-      const csvRows = [
-        ['ID', 'Тип номера', 'Номер', 'Заезд', 'Выезд', 'Гость', 'Статус'],
-        ...filtered.map(b => [
-          b.id,
-          typeof b.room.room_class === 'object' ? b.room.room_class.label : b.room.room_class,
-          b.room.number,
-          formatDateTime(b.check_in),
-          formatDateTime(b.check_out),
-          b.guest?.full_name || '',
-          STATUS_LABELS[b.status] || b.status
-        ])
-      ];
-      const csv = csvRows.map(row => row.map(String).map(v => `"${v.replace(/"/g, '""')}"`).join(',')).join('\n');
-      const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
-      const link = document.createElement('a');
-      link.href = URL.createObjectURL(blob);
-      link.setAttribute('download', 'bookings-list.csv');
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-      setToast({ message: 'Экспорт завершён', type: 'success' });
-    }
+    setShowExportModal(true);
   }
+
+  const handleExportConfirm = () => {
+    setExportLoading(true);
+    setTimeout(() => {
+      if (view === 'calendar') {
+        // Календарь: экспортируем список бронирований за месяц
+        const csvRows = [
+          ['ID', 'Тип номера', 'Номер', 'Заезд', 'Выезд', 'Гость', 'Статус', 'Оплачено'],
+          ...filtered.map(b => [
+            b.id,
+            typeof b.room.room_class === 'object' ? b.room.room_class.label : b.room.room_class,
+            b.room.number,
+            formatDateTime(b.check_in),
+            formatDateTime(b.check_out),
+            b.guest?.full_name || '',
+            STATUS_LABELS[b.status] || b.status,
+            b.payment_status === 'paid' ? 'Да' : 'Нет'
+          ])
+        ];
+        const csv = csvRows.map(row => row.map(String).map(v => `"${v.replace(/"/g, '""')}"`).join(',')).join('\n');
+        const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+        const link = document.createElement('a');
+        link.href = URL.createObjectURL(blob);
+        link.setAttribute('download', `бронирования_календарь_${new Date().toISOString().split('T')[0]}.csv`);
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+      } else {
+        // Классическая таблица: экспортируем список бронирований
+        const csvRows = [
+          ['ID', 'Тип номера', 'Номер', 'Заезд', 'Выезд', 'Гость', 'Статус', 'Оплачено', 'Сумма'],
+          ...filtered.map(b => [
+            b.id,
+            typeof b.room.room_class === 'object' ? b.room.room_class.label : b.room.room_class,
+            b.room.number,
+            formatDateTime(b.check_in),
+            formatDateTime(b.check_out),
+            b.guest?.full_name || '',
+            STATUS_LABELS[b.status] || b.status,
+            b.payment_status === 'paid' ? 'Да' : 'Нет',
+            b.total_amount ? Math.round(b.total_amount).toLocaleString() + ' сом' : '—'
+          ])
+        ];
+        const csv = csvRows.map(row => row.map(String).map(v => `"${v.replace(/"/g, '""')}"`).join(',')).join('\n');
+        const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+        const link = document.createElement('a');
+        link.href = URL.createObjectURL(blob);
+        link.setAttribute('download', `бронирования_список_${new Date().toISOString().split('T')[0]}.csv`);
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+      }
+      setToast({ message: 'Экспорт завершён', type: 'success' });
+      setExportLoading(false);
+      setShowExportModal(false);
+    }, 1000);
+  };
 
   // Клик по гостю
   function handleGuestClick(guest: any) {
@@ -580,15 +699,15 @@ export default function BookingsPage() {
             onClick={exportToCSV}>
                 <FaFileCsv /> Экспорт
               </button>
-          <button className={`px-4 py-2 rounded-lg font-semibold shadow flex items-center gap-2 ${view === 'list' ? 'bg-blue-600 text-white' : 'bg-white text-gray-700 border border-gray-200'}`}
+          <button className={`px-4 py-2 rounded-lg font-semibold shadow flex items-center gap-2 transition-all duration-200 ${view === 'list' ? 'bg-gradient-to-r from-blue-600 to-blue-700 text-white shadow-lg scale-105' : 'bg-white text-gray-700 border border-gray-200 hover:bg-gray-50 hover:border-gray-300'}`}
             onClick={() => setView('list')}>
             <FaList /> Лист
               </button>
-          <button className={`px-4 py-2 rounded-lg font-semibold shadow flex items-center gap-2 ${view === 'table' ? 'bg-blue-600 text-white' : 'bg-white text-gray-700 border border-gray-200'}`}
+          <button className={`px-4 py-2 rounded-lg font-semibold shadow flex items-center gap-2 transition-all duration-200 ${view === 'table' ? 'bg-gradient-to-r from-blue-600 to-blue-700 text-white shadow-lg scale-105' : 'bg-white text-gray-700 border border-gray-200 hover:bg-gray-50 hover:border-gray-300'}`}
             onClick={() => setView('table')}>
             <FaStream /> Таблица
               </button>
-          <button className={`px-4 py-2 rounded-lg font-semibold shadow flex items-center gap-2 ${view === 'calendar' ? 'bg-blue-600 text-white' : 'bg-white text-gray-700 border border-gray-200'}`}
+          <button className={`px-4 py-2 rounded-lg font-semibold shadow flex items-center gap-2 transition-all duration-200 ${view === 'calendar' ? 'bg-gradient-to-r from-blue-600 to-blue-700 text-white shadow-lg scale-105' : 'bg-white text-gray-700 border border-gray-200 hover:bg-gray-50 hover:border-gray-300'}`}
             onClick={() => setView('calendar')}>
             <FaCalendarAlt /> Календарь
               </button>
@@ -600,48 +719,67 @@ export default function BookingsPage() {
           {TABS.map(tab => (
                   <button
               key={tab.key}
-              className={`px-4 py-2 rounded-lg font-semibold border shadow-sm ${activeTab === tab.key ? 'bg-blue-600 text-white' : 'bg-white text-gray-700 border-gray-200'}`}
+              className={`px-4 py-2 rounded-lg font-semibold border shadow-sm transition-all duration-200 ${activeTab === tab.key ? 'bg-gradient-to-r from-blue-600 to-blue-700 text-white shadow-lg scale-105' : 'bg-white text-gray-700 border-gray-200 hover:bg-gray-50 hover:border-gray-300'}`}
               onClick={() => setActiveTab(tab.key)}
             >
               {tab.label}
             </button>
           ))}
                     </div>
-                      <button
-          className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg font-semibold shadow flex items-center gap-2"
+                      <Button
           onClick={() => setShowAddModal(true)}
+                        icon={<FaPlus />}
+                        className="shadow-lg hover:shadow-xl"
                       >
-          <FaPlus /> Добавить
-                      </button>
+                        <span className="font-bold">Добавить</span>
+                      </Button>
                     </div>
       {/* Основной контент: таймлайн или календарь */}
       <div className="w-full px-4 mb-8">
         {view === 'list' ? (
           // Компактная таблица (лист) прямо здесь
-          <div className="rounded-lg shadow bg-white w-full">
-            <table className="w-full text-sm">
+          <div className="rounded-xl shadow-lg bg-white w-full border border-gray-100 overflow-hidden">
+            <div className="overflow-x-auto" style={{ scrollbarWidth: 'thin', scrollbarColor: '#cbd5e0 #f7fafc' }}>
+              <table className="w-full text-sm min-w-[1000px]">
               <thead>
-                <tr className="bg-gray-50 text-gray-700">
-                  <th className="p-3 text-left">ID</th>
-                  <th className="p-3 text-left">Тип номера</th>
-                  <th className="p-3 text-left">Номер</th>
-                  <th className="p-3 text-left">Заезд</th>
-                  <th className="p-3 text-left">Выезд</th>
-                  <th className="p-3 text-left">Гость</th>
-                  <th className="p-3 text-left">Статус</th>
-                  <th className="p-3 text-left">Оплачено</th>
-                  <th className="p-3 text-left">Цена</th>
-                  <th className="p-3 text-left">Действия</th>
+                <tr className="bg-gradient-to-r from-gray-50 to-blue-50 text-gray-700 border-b border-gray-200">
+                              <th className="p-3 text-left font-bold">ID</th>
+            <th className="p-3 text-left font-bold">Тип номера</th>
+            <th className="p-3 text-left font-bold">Номер</th>
+            <th className="p-3 text-left font-bold">Заезд</th>
+            <th className="p-3 text-left font-bold">Выезд</th>
+            <th className="p-3 text-left font-bold">Гость</th>
+            <th className="p-3 text-left font-bold">Статус</th>
+            <th className="p-3 text-left font-bold">Оплачено</th>
+            <th className="p-3 text-left font-bold">Цена</th>
+            <th className="p-3 text-left font-bold">Действия</th>
                 </tr>
               </thead>
               <tbody>
                 {loading ? (
-                  <tr><td colSpan={10} className="text-center text-gray-400 py-8">Загрузка...</td></tr>
+                  <tr><td colSpan={10} className="text-center py-12">
+                    <div className="flex flex-col items-center gap-3">
+                      <LoadingSpinner size="md" text="Загрузка бронирований..." />
+                    </div>
+                  </td></tr>
                 ) : filtered.length === 0 ? (
-                  <tr><td colSpan={10} className="text-center text-gray-400 py-8">Нет бронирований</td></tr>
+                  <tr><td colSpan={10} className="text-center py-12">
+                    <div className="flex flex-col items-center gap-3">
+                      <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center">
+                        <FaCalendarAlt className="text-gray-400 text-2xl" />
+                      </div>
+                      <p className="text-gray-500 font-medium">Нет бронирований</p>
+                      <p className="text-gray-400 text-sm">Попробуйте изменить фильтры или добавить новое бронирование</p>
+                    </div>
+                  </td></tr>
                 ) : (
-                  filtered.map((b, idx) => (
-                    <tr key={b.id} className={`transition-all border-b last:border-b-0 ${idx % 2 === 1 ? 'bg-gray-50' : 'bg-white'} hover:bg-blue-50`} onClick={() => setActiveRow(b.id)}>
+                  filtered.map((b, idx) => {
+                    const urlParams = new URLSearchParams(window.location.search);
+                    const bookingId = urlParams.get('bookingId');
+                    const isHighlighted = bookingId && b.id === parseInt(bookingId);
+                    
+                    return (
+                      <tr key={b.id} className={`transition-all duration-200 border-b border-gray-100 last:border-b-0 ${idx % 2 === 1 ? 'bg-gray-50/50' : 'bg-white'} hover:bg-gradient-to-r hover:from-blue-50 hover:to-purple-50 group cursor-pointer ${isHighlighted ? 'bg-yellow-100 animate-pulse' : ''}`} onClick={() => setActiveRow(b.id)}>
                       <td className="p-3 font-mono text-xs text-gray-500 min-w-0 truncate">{idx + 1}</td>
                       <td className="p-3 min-w-0 truncate">
                         {typeof b.room.room_class === 'object' && b.room.room_class !== null
@@ -657,33 +795,33 @@ export default function BookingsPage() {
                       <td className="p-3 min-w-0 truncate">{b.room.number}</td>
                       <td className="p-3 min-w-0 truncate">{formatDateTime(b.check_in)}</td>
                       <td className="p-3 min-w-0 truncate">{formatDateTime(b.check_out)}</td>
-                      <td className="p-3 min-w-0 truncate">{b.guest?.full_name || '—'}</td>
-                      <td className="p-3 min-w-0 truncate">{STATUS_LABELS[b.status] || b.status}</td>
                       <td className="p-3 min-w-0 truncate">
-                        <span className={`px-2 py-1 rounded-full text-xs font-semibold ${
-                          b.payment_status === 'paid' ? 'bg-green-100 text-green-800' :
-                          b.payment_status === 'unpaid' ? 'bg-red-100 text-red-800' :
-                          'bg-yellow-100 text-yellow-800'
-                        }`}>
-                          {b.payment_status === 'paid' ? 'Оплачено' :
-                           b.payment_status === 'unpaid' ? 'Не оплачено' :
-                           'В ожидании'}
-                        </span>
+                      <HighlightedText 
+                        text={b.guest?.full_name || '—'} 
+                        searchQuery={filters.search} 
+                        className="" 
+                      />
+                    </td>
+                      <td className="p-3 min-w-0 truncate"><StatusBadge status={getBookingStatus(b)} size="sm" /></td>
+                      <td className="p-3 min-w-0 truncate">
+                        <StatusBadge status={b.payment_status || 'pending'} size="sm" />
                       </td>
                       <td className="p-3 min-w-0 truncate font-mono">
                         {b.total_amount ? `${Math.round(b.total_amount).toLocaleString()} сом` : '—'}
                       </td>
                       <td className="p-3 min-w-0 truncate">
                         <div className="flex gap-2">
-                          <button onClick={e => { e.stopPropagation(); setEditBooking(b); }} className="bg-blue-100 hover:bg-blue-200 text-blue-700 px-3 py-1 rounded font-semibold flex items-center gap-1 text-xs">Ред.</button>
-                          <button onClick={e => { e.stopPropagation(); setDeleteBooking(b); }} className="bg-red-100 hover:bg-red-200 text-red-700 px-3 py-1 rounded font-semibold flex items-center gap-1 text-xs">Удалить</button>
+                          <button onClick={e => { e.stopPropagation(); setEditBooking(b); }} className="bg-blue-100 hover:bg-blue-200 text-blue-700 px-3 py-1 rounded-lg font-semibold flex items-center gap-1 text-xs transition-all duration-200 hover:scale-105 shadow-sm">Ред.</button>
+                          <button onClick={e => { e.stopPropagation(); setDeleteBooking(b); }} className="bg-red-100 hover:bg-red-200 text-red-700 px-3 py-1 rounded-lg font-semibold flex items-center gap-1 text-xs transition-all duration-200 hover:scale-105 shadow-sm">Удалить</button>
                         </div>
                       </td>
                     </tr>
-                  ))
+                  );
+                })
                 )}
               </tbody>
             </table>
+            </div>
           </div>
         ) : view === 'table' ? (
           <BookingTable bookings={filtered} rooms={rooms} startDate={new Date(now.getFullYear(), now.getMonth(), 1)} endDate={new Date(now.getFullYear(), now.getMonth() + 1, 0)} />
@@ -714,13 +852,25 @@ export default function BookingsPage() {
       )}
       {/* Модалка подтверждения удаления */}
       {deleteBooking && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 backdrop-blur-sm">
-          <div className="bg-white rounded-xl shadow-2xl p-8 w-full max-w-sm relative border border-gray-100">
-            <h2 className="text-xl font-bold mb-4">Удалить бронирование?</h2>
-            <p className="mb-6 text-gray-600">Вы уверены, что хотите удалить бронирование <b>№{deleteBooking.id}</b>?</p>
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm animate-fade-in">
+          <div className="bg-white rounded-2xl shadow-2xl p-8 w-full max-w-md relative border border-gray-100 animate-scale-in">
+            <div className="flex items-center gap-3 mb-4">
+              <div className="w-12 h-12 bg-red-100 rounded-full flex items-center justify-center">
+                <FaTrash className="text-red-600 text-xl" />
+              </div>
+              <h2 className="text-xl font-bold text-gray-900">Удалить бронирование?</h2>
+            </div>
+            <p className="mb-6 text-gray-600">Вы уверены, что хотите удалить бронирование <b>№{deleteBooking.id}</b>? Это действие нельзя отменить.</p>
             <div className="flex justify-end gap-3">
-              <button onClick={() => setDeleteBooking(null)} className="bg-gray-200 hover:bg-gray-300 text-gray-700 px-5 py-2 rounded font-semibold">Отмена</button>
-              <button
+              <Button
+                variant="ghost"
+                onClick={() => setDeleteBooking(null)}
+                className="hover:bg-gray-100"
+              >
+                Отмена
+              </Button>
+              <Button
+                variant="danger"
                 onClick={async () => {
                   setDeleting(true);
                   await fetch(`${API_URL}/api/bookings/${deleteBooking.id}/`, {
@@ -731,9 +881,11 @@ export default function BookingsPage() {
                   setDeleteBooking(null);
                   await fetchAll();
                 }}
+                loading={deleting}
                 disabled={deleting}
-                className="bg-red-600 hover:bg-red-700 text-white px-6 py-2 rounded font-semibold shadow disabled:opacity-60 disabled:cursor-not-allowed"
-              >{deleting ? 'Удаление...' : 'Удалить'}</button>
+              >
+                {deleting ? 'Удаление...' : 'Удалить'}
+              </Button>
             </div>
           </div>
             </div>
@@ -773,7 +925,7 @@ export default function BookingsPage() {
           <input type="number" min={1} max={10} className="input w-full" value={filters.people_count} onChange={e => setFilters(f => ({ ...f, people_count: e.target.value }))} placeholder="Любое" />
 
           <div className="flex gap-2 mt-4">
-            <button type="button" onClick={() => setFilters({ status: '', room_id: '', guest_id: '', people_count: '' })} className="bg-gray-200 hover:bg-gray-300 text-gray-700 px-5 py-2 rounded font-semibold flex-1">Сбросить</button>
+            <button type="button" onClick={() => setFilters({ search: '', status: '', room_id: '', guest_id: '', people_count: '' })} className="bg-gray-200 hover:bg-gray-300 text-gray-700 px-5 py-2 rounded font-semibold flex-1">Сбросить</button>
             <button type="button" onClick={() => setShowFilters(false)} className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-2 rounded font-semibold shadow flex-1">Применить</button>
                 </div>
               </div>
@@ -784,6 +936,18 @@ export default function BookingsPage() {
           caret-color: transparent;
         }
       `}</style>
+      
+      {/* Модальное окно подтверждения экспорта */}
+      <ExportConfirmModal
+        open={showExportModal}
+        onClose={() => setShowExportModal(false)}
+        onConfirm={handleExportConfirm}
+        title="Экспорт бронирований"
+        description={`Экспорт ${filtered.length} бронирований в CSV файл`}
+        fileName={`бронирования_${view === 'calendar' ? 'календарь' : 'список'}_${new Date().toISOString().split('T')[0]}.csv`}
+        loading={exportLoading}
+      />
+      
       {toast && <Toast message={toast.message} type={toast.type} onClose={() => setToast(null)} />}
     </div>
   );
