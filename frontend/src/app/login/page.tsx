@@ -24,8 +24,8 @@ export default function LoginPage() {
       });
       const data = await res.json();
       if (res.ok && data.access) {
-        const resUser = await fetch(`${API_URL}/api/users/me/`, { headers: { Authorization: `Bearer ${data.access}` } });
-        const user = await resUser.json();
+        // Наш кастомный view возвращает пользователя сразу в ответе
+        const user = data.user;
         
         // Используем хук для логина
         login(data.access, data.refresh, user.role);

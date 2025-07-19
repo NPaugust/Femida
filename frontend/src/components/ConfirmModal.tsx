@@ -4,9 +4,10 @@ import { FaExclamationTriangle } from 'react-icons/fa';
 interface ConfirmModalProps {
   open: boolean;
   title?: string;
-  description?: string;
+  description?: string | React.ReactNode;
   confirmText?: string;
   cancelText?: string;
+  confirmClassName?: string;
   onConfirm: () => void;
   onCancel: () => void;
 }
@@ -17,6 +18,7 @@ export default function ConfirmModal({
   description = 'Вы уверены, что хотите продолжить?',
   confirmText = 'Удалить',
   cancelText = 'Отмена',
+  confirmClassName = 'px-5 py-2 rounded-lg bg-red-600 hover:bg-red-700 text-white font-semibold shadow transition',
   onConfirm,
   onCancel,
 }: ConfirmModalProps) {
@@ -26,7 +28,7 @@ export default function ConfirmModal({
       <div className="bg-white rounded-2xl shadow-2xl p-8 w-full max-w-sm relative animate-modal-in border border-gray-100 flex flex-col items-center">
         <FaExclamationTriangle className="text-red-500 text-4xl mb-3" />
         <h2 className="text-xl font-bold mb-2 text-center">{title}</h2>
-        <p className="text-gray-600 text-center mb-6">{description}</p>
+        <div className="text-gray-600 text-center mb-6">{description}</div>
         <div className="flex gap-3 w-full justify-center">
           <button
             onClick={onCancel}
@@ -36,7 +38,7 @@ export default function ConfirmModal({
           </button>
           <button
             onClick={onConfirm}
-            className="px-5 py-2 rounded-lg bg-red-600 hover:bg-red-700 text-white font-semibold shadow transition"
+            className={confirmClassName}
           >
             {confirmText}
           </button>

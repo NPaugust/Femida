@@ -6,18 +6,88 @@ from rest_framework_simplejwt.views import TokenObtainPairView, TokenRefreshView
 from rest_framework.decorators import action
 from rest_framework.response import Response
 from rest_framework import status
-from rest_framework.permissions import IsAuthenticated
+from rest_framework.permissions import IsAuthenticated, AllowAny
 import logging
 from django.db.models.signals import post_save, post_delete
 from django.dispatch import receiver
 from rest_framework.views import APIView
 from rest_framework.decorators import api_view, permission_classes
 from django.shortcuts import get_object_or_404
+from django.contrib.auth import authenticate
+from rest_framework_simplejwt.tokens import RefreshToken
+from django.contrib.auth.hashers import check_password
+from django.utils import timezone
 
 # Настройка логирования
 logger = logging.getLogger(__name__)
 
 # Create your views here.
+
+class CustomTokenObtainPairView(TokenObtainPairView):
+    """Кастомный view для аутентификации с дополнительными проверками"""
+    
+    def post(self, request, *args, **kwargs):
+        try:
+            username = request.data.get('username')
+            password = request.data.get('password')
+            
+            if not username or not password:
+                return Response({
+                    'error': 'Неверный логин или пароль'
+                }, status=status.HTTP_400_BAD_REQUEST)
+            
+            # Проверяем, существует ли пользователь
+            try:
+                user = User.objects.get(username=username)
+            except User.DoesNotExist:
+                return Response({
+                    'error': 'Неверный логин или пароль'
+                }, status=status.HTTP_401_UNAUTHORIZED)
+            
+            # Проверяем, активен ли пользователь
+            if not user.is_active:
+                return Response({
+                    'error': 'Аккаунт заблокирован'
+                }, status=status.HTTP_401_UNAUTHORIZED)
+            
+            # Проверяем пароль
+            if not check_password(password, user.password):
+                return Response({
+                    'error': 'Неверный логин или пароль'
+                }, status=status.HTTP_401_UNAUTHORIZED)
+            
+            # Проверяем права доступа (только админы и супер-админы)
+            if user.role not in ['admin', 'superadmin']:
+                return Response({
+                    'error': 'Недостаточно прав доступа'
+                }, status=status.HTTP_403_FORBIDDEN)
+            
+            # Обновляем last_seen
+            user.last_seen = timezone.now()
+            user.save(update_fields=['last_seen'])
+            
+            # Генерируем токены
+            refresh = RefreshToken.for_user(user)
+            
+            return Response({
+                'access': str(refresh.access_token),
+                'refresh': str(refresh),
+                'user': {
+                    'id': user.id,
+                    'username': user.username,
+                    'first_name': user.first_name,
+                    'last_name': user.last_name,
+                    'role': user.role,
+                    'phone': str(user.phone) if user.phone else '',
+                    'is_online': user.is_online()
+                }
+            })
+            
+        except Exception as e:
+            logger.error(f"Ошибка аутентификации: {str(e)}")
+            return Response({
+                'error': 'Ошибка сервера'
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 class UserViewSet(viewsets.ModelViewSet):
     queryset = User.objects.all()
@@ -101,8 +171,7 @@ class GuestViewSet(viewsets.ModelViewSet):
 
     def update(self, request, *args, **kwargs):
         try:
-            guest = self.perform_update(request, *args, **kwargs)
-            return guest
+                return super().update(request, *args, **kwargs)
         except Exception as e:
             logger.error(f"Error in GuestViewSet.update: {str(e)}")
             return Response({'error': 'Internal server error'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
@@ -122,8 +191,8 @@ class GuestViewSet(viewsets.ModelViewSet):
         logger.info(f"Создан новый гость: {guest.full_name}")
         # Здесь можно добавить уведомление о новом госте
 
-    def perform_update(self, request, *args, **kwargs):
-        guest = super().perform_update(request, *args, **kwargs)
+    def perform_update(self, serializer):
+        guest = serializer.save()
         logger.info(f"Обновлен гость: {guest.full_name}")
         # Здесь можно добавить уведомление об обновлении
         return guest

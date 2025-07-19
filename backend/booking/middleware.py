@@ -13,8 +13,9 @@ class UserActivityMiddleware:
 
     def __call__(self, request):
         # Обновляем last_seen для аутентифицированного пользователя
-        if request.user.is_authenticated and not request.user.is_anonymous:
-            User.objects.filter(id=request.user.id).update(last_seen=timezone.now())
+        if request.user.is_authenticated and hasattr(request.user, 'last_seen'):
+            request.user.last_seen = timezone.now()
+            request.user.save(update_fields=['last_seen'])
         
         response = self.get_response(request)
         return response

@@ -2,16 +2,15 @@
 
 import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-// @ts-ignore
-import { saveAs } from 'file-saver';
-import { FaUser, FaEdit, FaTrash, FaFileCsv, FaPlus, FaMapMarkerAlt, FaCalendarAlt, FaMoneyBillWave, FaChartBar, FaCheckCircle, FaTimesCircle, FaComment } from 'react-icons/fa';
+import { FaUser, FaEdit, FaTrash, FaFileCsv, FaPlus, FaFilter, FaEye, FaSearch, FaCalendarAlt, FaPhone, FaIdCard, FaMoneyBillWave, FaChartBar, FaCheckCircle, FaTimesCircle, FaUserPlus, FaBuilding, FaCreditCard } from 'react-icons/fa';
 import dynamic from 'next/dynamic';
 import 'react-phone-input-2/lib/style.css';
 import { API_URL } from '../../shared/api';
 import { useSearchParams } from 'next/navigation';
 import ConfirmModal from '../../components/ConfirmModal';
+import Pagination from '../../components/Pagination';
 
-type Guest = {
+interface Guest {
   id: number;
   full_name: string;
   inn: string;
@@ -21,277 +20,347 @@ type Guest = {
   total_spent: number;
   visits_count: number;
   status: string;
-};
+}
 
 const PhoneInput: any = dynamic(() => import('react-phone-input-2').then(mod => mod.default), { ssr: false });
 
 const GUEST_STATUSES = [
-  { value: 'active', label: 'Активный', color: 'bg-green-200 text-green-800' },
-  { value: 'inactive', label: 'Неактивный', color: 'bg-gray-200 text-gray-800' },
-  { value: 'vip', label: 'ВИП', color: 'bg-purple-200 text-purple-800' },
-  { value: 'blacklist', label: 'Чёрный список', color: 'bg-red-200 text-red-800' },
+  { value: 'active', label: 'Активный', color: 'bg-green-100 text-green-800' },
+  { value: 'inactive', label: 'Неактивный', color: 'bg-gray-100 text-gray-800' },
+  { value: 'vip', label: 'ВИП', color: 'bg-purple-100 text-purple-800' },
+  { value: 'blacklist', label: 'Чёрный список', color: 'bg-red-100 text-red-800' },
 ];
 
-export default function GuestsPage() {
-  const { t } = useTranslation();
-  const [guests, setGuests] = useState<any[]>([]);
-  const [bookings, setBookings] = useState<any[]>([]);
-  const [error, setError] = useState('');
-  const [success, setSuccess] = useState('');
-  const [fullName, setFullName] = useState('');
-  const [inn, setInn] = useState('');
-  const [phone, setPhone] = useState('');
-  const [search, setSearch] = useState('');
-  const [loading, setLoading] = useState(true);
-  const [editGuest, setEditGuest] = useState<Guest | null>(null);
-  const [showAddModal, setShowAddModal] = useState(false);
-  const [addForm, setAddForm] = useState({
-    full_name: '',
-    inn: '',
-    phone: '',
+interface GuestModalProps {
+  open: boolean;
+  onClose: () => void;
+  onSave: (guest: any) => void;
+  initial?: Guest | null;
+}
+
+function GuestModal({ open, onClose, onSave, initial }: GuestModalProps) {
+  const [form, setForm] = useState({
+    full_name: initial?.full_name || '',
+    inn: initial?.inn || '',
+    phone: initial?.phone || '',
     country: 'kg',
-    notes: '',
-    status: 'active',
+    notes: initial?.notes || '',
+    status: initial?.status || 'active',
   });
-  const [addLoading, setAddLoading] = useState(false);
-  const [addError, setAddError] = useState('');
-  const [addSuccess, setAddSuccess] = useState('');
-  const [addFieldErrors, setAddFieldErrors] = useState<{[k:string]: string}>({});
-  const [currentPage, setCurrentPage] = useState(1);
-  const guestsPerPage = 10;
-  const searchParams = useSearchParams();
-  const [sortState, setSortState] = useState<{ field: string | null; order: 'asc' | 'desc' | null }>({ field: null, order: null });
-  const [showConfirmDelete, setShowConfirmDelete] = useState(false);
-  const [selectedDeleteId, setSelectedDeleteId] = useState<number | null>(null);
-  const [token, setToken] = useState<string | null>(null);
-  const [tokenLoaded, setTokenLoaded] = useState(false);
-  const [toast, setToast] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
-  const [filterStatus, setFilterStatus] = useState('');
-  const [filterVisitsFrom, setFilterVisitsFrom] = useState('');
-  const [filterVisitsTo, setFilterVisitsTo] = useState('');
-  const [filterSpentFrom, setFilterSpentFrom] = useState('');
-  const [filterSpentTo, setFilterSpentTo] = useState('');
-  const [selectedGuest, setSelectedGuest] = useState<Guest | null>(null);
-  const [showGuestPanel, setShowGuestPanel] = useState(false);
-  const [selectedGuestIds, setSelectedGuestIds] = useState<number[]>([]);
-  const [selectAll, setSelectAll] = useState(false);
-  const [editingCell, setEditingCell] = useState<{ guestId: number; field: string } | null>(null);
-  const [editingValue, setEditingValue] = useState('');
-  const [editingError, setEditingError] = useState('');
-  const [searchField, setSearchField] = useState('full_name');
-  const [savedFilters, setSavedFilters] = useState<{[key: string]: any}>({});
+  const [loading, setLoading] = useState(false);
+  const [errors, setErrors] = useState<{[key: string]: string}>({});
 
   useEffect(() => {
-    if (typeof window !== 'undefined') {
-      setToken(localStorage.getItem('access'));
-      setTokenLoaded(true);
-    }
-  }, []);
-
-  useEffect(() => {
-    if (!tokenLoaded) return; // ждём пока токен загрузится
-    if (!token) {
-      window.location.href = '/login';
-      return;
-    }
-    setLoading(true);
-    fetchGuests();
-    if (searchParams.get('add') === '1') {
-      setShowAddModal(true);
-    } else {
-      setShowAddModal(false);
-    }
-  }, [success, searchParams, tokenLoaded, token]);
-
-  const fetchGuests = () => {
-    if (!token) {
-      window.location.href = '/login';
-      return;
-    }
-    Promise.all([
-      fetch(`${API_URL}/api/guests/`, {
-        headers: {
-          'Authorization': `Bearer ${token}`,
-        },
-      }),
-      fetch(`${API_URL}/api/bookings/`, {
-        headers: {
-          'Authorization': `Bearer ${token}`,
-        },
-      }),
-    ])
-      .then(([guestsResponse, bookingsResponse]) => {
-        if (guestsResponse && bookingsResponse) {
-          guestsResponse.json().then(guestsData => {
-            bookingsResponse.json().then(bookingsData => {
-              setGuests(guestsData);
-              setBookings(bookingsData);
-              setLoading(false);
-            });
-          });
-        }
-      })
-      .catch((error) => {
-        setError('Ошибка загрузки гостей');
-        setLoading(false);
+    if (initial) {
+      setForm({
+        full_name: initial.full_name,
+        inn: initial.inn,
+        phone: initial.phone,
+        country: 'kg',
+        notes: initial.notes,
+        status: initial.status,
       });
-  };
+    } else {
+      setForm({
+        full_name: '',
+        inn: '',
+        phone: '',
+        country: 'kg',
+        notes: '',
+        status: 'active',
+      });
+    }
+    setErrors({});
+  }, [initial, open]);
 
-  const handleAddChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
-    setAddForm({ ...addForm, [e.target.name]: e.target.value });
+  const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
+    setForm({ ...form, [e.target.name]: e.target.value });
+    if (errors[e.target.name]) {
+      setErrors({ ...errors, [e.target.name]: '' });
+    }
   };
 
   const handlePhoneChange = (value: string, data: any) => {
-    setAddForm(f => ({ ...f, phone: '+' + value, country: data.countryCode }));
+    setForm(f => ({ ...f, phone: '+' + value, country: data.countryCode }));
+    if (errors.phone) {
+      setErrors({ ...errors, phone: '' });
+    }
   };
 
-  const validateGuestForm = () => {
-    const errors: {[k:string]: string} = {};
-    if (!addForm.full_name || addForm.full_name.length < 5) errors.full_name = 'ФИО слишком короткое';
-    if (!/^[0-9]{14}$/.test(addForm.inn)) errors.inn = 'ИНН должен содержать ровно 14 цифр';
-    if (!/^\+\d{7,16}$/.test(addForm.phone.replace(/\s/g, ''))) errors.phone = 'Введите корректный номер телефона';
-    return errors;
+  const validateForm = () => {
+    const newErrors: {[key: string]: string} = {};
+    if (!form.full_name || form.full_name.length < 3) {
+      newErrors.full_name = 'ФИО должно содержать минимум 3 символа';
+    }
+    if (!form.inn || !/^[0-9]{14}$/.test(form.inn)) {
+      newErrors.inn = 'ИНН должен содержать ровно 14 цифр';
+    }
+    if (!form.phone || !/^\+\d{7,16}$/.test(form.phone.replace(/\s/g, ''))) {
+      newErrors.phone = 'Введите корректный номер телефона';
+    }
+    return newErrors;
   };
 
-  const handleAddSubmit = async (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setAddError('');
-    setAddSuccess('');
-    const errors = validateGuestForm();
-    setAddFieldErrors(errors);
-    if (Object.keys(errors).length > 0) return;
-    setAddLoading(true);
+    const newErrors = validateForm();
+    if (Object.keys(newErrors).length > 0) {
+      setErrors(newErrors);
+      return;
+    }
+
+    setLoading(true);
     try {
-      const res = await fetch(`${API_URL}/api/guests/`, {
-        method: 'POST',
+      const token = localStorage.getItem('access');
+      const url = initial ? `${API_URL}/api/guests/${initial.id}/` : `${API_URL}/api/guests/`;
+      const method = initial ? 'PUT' : 'POST';
+      const response = await fetch(url, {
+        method,
         headers: {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${token}`,
         },
-        body: JSON.stringify(addForm),
+        body: JSON.stringify(form),
       });
-      
-      if (!res) return; // Ошибка аутентификации уже обработана
-      
-      if (!res.ok) {
-        const errorMessage = 'Ошибка при добавлении гостя. Проверьте корректность данных.';
-        setAddError(errorMessage);
-        showToast('error', errorMessage);
+      if (response.ok) {
+        const savedGuest = await response.json();
+        onSave(savedGuest);
+        onClose();
       } else {
-        setAddSuccess('Гость успешно добавлен');
-        showToast('success', 'Гость успешно добавлен');
-        setShowAddModal(false);
-        setAddForm({ full_name: '', inn: '', phone: '', country: 'kg', notes: '', status: 'active' });
-        setAddFieldErrors({});
-        fetchGuests();
+        setErrors({ submit: 'Ошибка при сохранении гостя' });
       }
-    } catch {
-      const errorMessage = 'Ошибка сети';
-      setAddError(errorMessage);
-      showToast('error', errorMessage);
+    } catch (error) {
+      setErrors({ submit: 'Ошибка сети' });
     } finally {
-      setAddLoading(false);
+      setLoading(false);
     }
+  };
+
+  if (!open) return null;
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 backdrop-blur-sm animate-fade-in">
+      <div className="bg-white rounded-xl shadow-2xl p-8 w-full max-w-xl relative animate-modal-in border border-gray-100 focus:outline-none">
+        <h2 className="text-xl font-bold mb-6">{initial ? 'Редактировать гостя' : 'Добавить гостя'}</h2>
+        <button onClick={onClose} className="absolute top-4 right-4 text-gray-400 hover:text-gray-700 text-2xl font-bold focus:outline-none">×</button>
+        <form className="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-4" onSubmit={handleSubmit}>
+          <label className="font-semibold md:text-right md:pr-2 flex items-center">ФИО *</label>
+          <input type="text" name="full_name" className="input w-full" value={form.full_name} onChange={handleChange} />
+          {errors.full_name && <div className="md:col-span-2 text-red-500 text-sm">{errors.full_name}</div>}
+
+          <label className="font-semibold md:text-right md:pr-2 flex items-center">ИНН *</label>
+          <input type="text" name="inn" className="input w-full" value={form.inn} onChange={handleChange} maxLength={14} />
+          {errors.inn && <div className="md:col-span-2 text-red-500 text-sm">{errors.inn}</div>}
+
+          <label className="font-semibold md:text-right md:pr-2 flex items-center">Телефон *</label>
+          <PhoneInput
+            country={'kg'}
+            value={form.phone.replace('+', '')}
+            onChange={handlePhoneChange}
+            inputStyle={{ width: '100%' }}
+            buttonClass="!bg-gray-100"
+            containerClass="!w-full"
+            placeholder="Введите номер телефона"
+            enableSearch
+          />
+          {errors.phone && <div className="md:col-span-2 text-red-500 text-sm">{errors.phone}</div>}
+
+          <label className="font-semibold md:text-right md:pr-2 flex items-center">Статус</label>
+          <select name="status" className="input w-full" value={form.status} onChange={handleChange}>
+            {GUEST_STATUSES.map(status => (
+              <option key={status.value} value={status.value}>{status.label}</option>
+            ))}
+          </select>
+
+          <label className="font-semibold md:text-right md:pr-2 flex items-center">Примечания</label>
+          <textarea name="notes" className="input w-full md:col-span-1" rows={2} value={form.notes} onChange={handleChange} />
+
+          {errors.submit && <div className="md:col-span-2 text-red-500 text-sm mt-2">{errors.submit}</div>}
+
+          <div className="md:col-span-2 flex justify-end gap-3 mt-6">
+            <button type="button" onClick={onClose} className="bg-gray-200 hover:bg-gray-300 text-gray-700 px-5 py-2 rounded font-semibold">Отмена</button>
+            <button type="submit" disabled={loading} className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-2 rounded font-semibold shadow disabled:opacity-60 disabled:cursor-not-allowed">{loading ? 'Сохранение...' : (initial ? 'Сохранить' : 'Добавить')}</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}
+
+export default function GuestsPage() {
+  const { t } = useTranslation();
+  const [guests, setGuests] = useState<Guest[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
+  const [showModal, setShowModal] = useState(false);
+  const [editingGuest, setEditingGuest] = useState<Guest | null>(null);
+  const [showFilters, setShowFilters] = useState(false);
+  const [filters, setFilters] = useState({
+    search: '',
+    status: '',
+    spentFrom: '',
+    spentTo: '',
+  });
+  const [selectedGuestIds, setSelectedGuestIds] = useState<number[]>([]);
+  const [showConfirmDelete, setShowConfirmDelete] = useState(false);
+  const [deleteTarget, setDeleteTarget] = useState<number | number[] | null>(null);
+  const [bookings, setBookings] = useState<any[]>([]);
+  
+  // Пагинация
+  const [currentPage, setCurrentPage] = useState(1);
+  const guestsPerPage = 9;
+
+  useEffect(() => {
+    fetchGuests();
+    fetchBookings();
+  }, []);
+
+  const fetchGuests = async () => {
+    try {
+      const token = localStorage.getItem('access');
+      if (!token) {
+        window.location.href = '/login';
+        return;
+      }
+
+      const response = await fetch(`${API_URL}/api/guests/`, {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+        },
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        setGuests(data);
+      } else {
+        setError('Ошибка загрузки гостей');
+      }
+    } catch (error) {
+      setError('Ошибка сети');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const fetchBookings = async () => {
+    try {
+      const token = localStorage.getItem('access');
+      if (!token) return;
+      const response = await fetch(`${API_URL}/api/bookings/`, {
+        headers: { 'Authorization': `Bearer ${token}` },
+      });
+      if (response.ok) {
+        const data = await response.json();
+        setBookings(data);
+      }
+    } catch {}
+  };
+
+  const handleSave = (guest: Guest) => {
+    if (editingGuest) {
+      setGuests(prev => prev.map(g => g.id === guest.id ? guest : g));
+    } else {
+      setGuests(prev => [...prev, guest]);
+    }
+    setShowModal(false);
+    setEditingGuest(null);
+    setCurrentPage(1); // Сброс на первую страницу при добавлении/редактировании
   };
 
   const handleEdit = (guest: Guest) => {
-    setEditGuest(guest);
-    setFullName(guest.full_name);
-    setInn(guest.inn);
-    setPhone(guest.phone);
+    setEditingGuest(guest);
+    setShowModal(true);
   };
 
-  const handleEditSave = async () => {
-    if (!editGuest) return;
-    const res = await fetch(`${API_URL}/api/guests/${editGuest.id}/`, {
-      method: 'PUT',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${token}`,
-      },
-      body: JSON.stringify({
-        full_name: fullName,
-        inn: inn,
-        phone: phone,
-      }),
-    });
-    
-    if (!res) return; // Ошибка аутентификации уже обработана
-    
-    if (res.ok) {
-      setEditGuest(null);
-      setSuccess('Гость обновлён');
-      showToast('success', 'Гость успешно обновлён');
-      fetchGuests();
-    } else {
-      showToast('error', 'Ошибка при обновлении гостя');
-    }
-  };
-
-  const handleDelete = async (guestId: number) => {
-    setSelectedDeleteId(guestId);
+  const handleDelete = (guestId: number) => {
+    setDeleteTarget(guestId);
     setShowConfirmDelete(true);
   };
 
   const confirmDelete = async () => {
-    if (!selectedDeleteId) return;
-    const res = await fetch(`${API_URL}/api/guests/${selectedDeleteId}/`, {
-      method: 'DELETE',
-      headers: {
-        'Authorization': `Bearer ${token}`,
-      },
-    });
-    
-    if (!res) return; // Ошибка аутентификации уже обработана
-    
-    if (res.ok) {
-      setSuccess('Гость удалён');
-      showToast('success', 'Гость успешно удалён');
-      fetchGuests();
-    } else {
-      showToast('error', 'Ошибка при удалении гостя');
+    if (!deleteTarget) return;
+
+    try {
+      const token = localStorage.getItem('access');
+      const ids = Array.isArray(deleteTarget) ? deleteTarget : [deleteTarget];
+      
+      await Promise.all(ids.map(id => 
+        fetch(`${API_URL}/api/guests/${id}/`, {
+          method: 'DELETE',
+          headers: {
+            'Authorization': `Bearer ${token}`,
+          },
+        })
+      ));
+
+      setGuests(prev => prev.filter(g => !ids.includes(g.id)));
+      setSelectedGuestIds([]);
+    } catch (error) {
+      setError('Ошибка при удалении');
+    } finally {
+      setDeleteTarget(null);
+      setShowConfirmDelete(false);
     }
-    setShowConfirmDelete(false);
-    setSelectedDeleteId(null);
   };
 
-  const guestsArray = Array.isArray(guests) ? guests : [];
-  const filteredGuests = guestsArray.filter(g => {
-    const searchMatch = !search || 
-      (searchField === 'full_name' && g.full_name.toLowerCase().includes(search.toLowerCase())) ||
-      (searchField === 'phone' && g.phone.includes(search)) ||
-      (searchField === 'inn' && g.inn.includes(search));
+  const handleSelectGuest = (id: number) => {
+    setSelectedGuestIds(prev => 
+      prev.includes(id) 
+        ? prev.filter(gId => gId !== id)
+        : [...prev, id]
+    );
+  };
+
+  const handleSelectAll = () => {
+    if (selectedGuestIds.length === paginatedGuests.length) {
+      setSelectedGuestIds([]);
+    } else {
+      setSelectedGuestIds(paginatedGuests.map(g => g.id));
+    }
+  };
+
+  const handleMassDelete = () => {
+    setDeleteTarget(selectedGuestIds);
+    setShowConfirmDelete(true);
+  };
+
+  const exportToCSV = () => {
+    const headers = ['ID', 'ФИО', 'ИНН', 'Телефон', 'Статус', 'Посещений', 'Оплачено', 'Дата регистрации'];
+    const csvContent = [
+      headers.join(','),
+      ...filteredGuests.map(guest => [
+        guest.id,
+        `"${guest.full_name}"`,
+        guest.inn,
+        guest.phone,
+        GUEST_STATUSES.find(s => s.value === guest.status)?.label || guest.status,
+        guest.visits_count || 0,
+        guest.total_spent || 0,
+        guest.registration_date || ''
+      ].join(','))
+    ].join('\n');
+
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement('a');
+    link.href = URL.createObjectURL(blob);
+    link.download = `guests_${new Date().toISOString().split('T')[0]}.csv`;
+    link.click();
+  };
+
+  const filteredGuests = guests.filter(guest => {
+    const matchesSearch = !filters.search || 
+      guest.full_name.toLowerCase().includes(filters.search.toLowerCase()) ||
+      guest.phone.includes(filters.search) ||
+      guest.inn.includes(filters.search);
     
-    const statusMatch = !filterStatus || g.status === filterStatus;
-    const visitsFromMatch = !filterVisitsFrom || (g.visits_count || 0) >= Number(filterVisitsFrom);
-    const visitsToMatch = !filterVisitsTo || (g.visits_count || 0) <= Number(filterVisitsTo);
-    const spentFromMatch = !filterSpentFrom || (g.total_spent || 0) >= Number(filterSpentFrom);
-    const spentToMatch = !filterSpentTo || (g.total_spent || 0) <= Number(filterSpentTo);
+    const matchesStatus = !filters.status || guest.status === filters.status;
     
-    return searchMatch && statusMatch && visitsFromMatch && visitsToMatch && spentFromMatch && spentToMatch;
+    const spent = guest.total_spent || 0;
+    const matchesSpent = (!filters.spentFrom || spent >= parseInt(filters.spentFrom)) &&
+                        (!filters.spentTo || spent <= parseInt(filters.spentTo));
+
+    return matchesSearch && matchesStatus && matchesSpent;
   });
-
-  const handleSort = (field: string) => {
-    setSortState(prev => {
-      if (prev.field !== field) return { field, order: 'asc' };
-      if (prev.order === 'asc') return { field, order: 'desc' };
-      if (prev.order === 'desc') return { field: null, order: null };
-      return { field, order: 'asc' };
-    });
-  };
-
-  const sortedGuests = [...filteredGuests];
-  if (sortState.field && sortState.order) {
-    sortedGuests.sort((a, b) => {
-      let aValue = a[sortState.field!];
-      let bValue = b[sortState.field!];
-      if (typeof aValue === 'string') aValue = aValue.toLowerCase();
-      if (typeof bValue === 'string') bValue = bValue.toLowerCase();
-      if (aValue < bValue) return sortState.order === 'asc' ? -1 : 1;
-      if (aValue > bValue) return sortState.order === 'asc' ? 1 : -1;
-      return 0;
-    });
-  }
 
   // Пагинация
   const totalPages = Math.ceil(filteredGuests.length / guestsPerPage);
@@ -300,694 +369,420 @@ export default function GuestsPage() {
     currentPage * guestsPerPage
   );
 
-  const exportToCSV = () => {
-    const header = 'ФИО,ИНН,Телефон,Статус,Посещений,Потрачено (сом),Дата регистрации,Примечания';
-    const rows = filteredGuests.map(g => {
-      const status = GUEST_STATUSES.find(s => s.value === g.status)?.label || g.status;
-      return `${g.full_name},${g.inn},${g.phone},${status},${g.visits_count || 0},${g.total_spent || 0},${g.registration_date || ''},"${g.notes || ''}"`;
-    });
-    const csv = [header, ...rows].join('\n');
-    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
-    saveAs(blob, 'guests.csv');
-  };
-
-  const getBookingCount = (guestId: number) => {
-    return bookings.filter(b => b.guest?.id === guestId).length;
-  };
-
-  const showToast = (type: 'success' | 'error', message: string) => {
-    setToast({ type, message });
-    setTimeout(() => setToast(null), 3000);
-  };
-
   const getGuestStatistics = () => {
-    const total = filteredGuests.length;
-    const active = filteredGuests.filter(g => g.status === 'active').length;
-    const vip = filteredGuests.filter(g => g.status === 'vip').length;
-    const totalSpent = filteredGuests.reduce((sum, g) => sum + (g.total_spent || 0), 0);
-    const totalVisits = filteredGuests.reduce((sum, g) => sum + (g.visits_count || 0), 0);
+    const total = guests.length;
+    const active = guests.filter(g => g.status === 'active').length;
+    const totalBookings = guests.reduce((sum, g) => sum + (g.visits_count || 0), 0);
+    const totalPaid = guests.reduce((sum, g) => sum + (Number(g.total_spent) || 0), 0);
     
-    return {
-      total,
-      active,
-      vip,
-      totalSpent,
-      totalVisits,
-      activePercentage: total > 0 ? Math.round((active / total) * 100) : 0,
-      averageSpent: total > 0 ? Math.round(totalSpent / total) : 0,
-      averageVisits: total > 0 ? Math.round(totalVisits / total) : 0,
-    };
+    return { total, active, totalBookings, totalPaid };
   };
 
-  const openGuestPanel = (guest: Guest) => {
-    setSelectedGuest(guest);
-    setShowGuestPanel(true);
-  };
-  const closeGuestPanel = () => {
-    setShowGuestPanel(false);
-    setSelectedGuest(null);
-  };
+  // Для каждого гостя ищем его бронирования и сумму оплат
+  const getGuestBookings = (guestId: number) => bookings.filter(b => 
+    (typeof b.guest === 'object' ? b.guest.id : b.guest) === guestId
+  );
+  // Удаляю getGuestPaid и total_spent, amount_paid
 
-  const handleSelectGuest = (id: number) => {
-    setSelectedGuestIds(prev => prev.includes(id) ? prev.filter(gid => gid !== id) : [...prev, id]);
-  };
-  const handleSelectAll = () => {
-    if (selectAll) {
-      setSelectedGuestIds([]);
-      setSelectAll(false);
-    } else {
-      setSelectedGuestIds(filteredGuests.map(g => g.id));
-      setSelectAll(true);
-    }
-  };
+  // Для карточки 'Забронированных гостей'
+  const bookedGuestIds = new Set(
+    bookings
+      .filter(b => b.status === 'active')
+      .map(b => typeof b.guest === 'object' ? b.guest.id : b.guest)
+  );
+  const bookedGuestsCount = guests.filter(g => bookedGuestIds.has(g.id)).length;
 
-  const handleMassDelete = async () => {
-    if (!window.confirm(`Удалить ${selectedGuestIds.length} гостей? Это действие необратимо!`)) return;
-    try {
-      for (const id of selectedGuestIds) {
-        await fetch(`${API_URL}/api/guests/${id}/`, {
-          method: 'DELETE',
-          headers: { 'Authorization': `Bearer ${token}` },
-        });
-      }
-      showToast('success', 'Гости удалены');
-      setSelectedGuestIds([]);
-      setSelectAll(false);
-      fetchGuests();
-    } catch {
-      showToast('error', 'Ошибка при удалении гостей');
-    }
-  };
+  // Для колонки 'Оплачено' в таблице гостей
+  const totalPaid = bookings
+    .filter(b => b.payment_status === 'paid')
+    .reduce((sum, b) => sum + (b.total_amount || 0), 0);
 
-  const handleMassStatusChange = async (status: string) => {
-    try {
-      for (const id of selectedGuestIds) {
-        await fetch(`${API_URL}/api/guests/${id}/`, {
-          method: 'PATCH',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${token}`,
-          },
-          body: JSON.stringify({ status }),
-        });
-      }
-      showToast('success', 'Статус обновлён');
-      setSelectedGuestIds([]);
-      setSelectAll(false);
-      fetchGuests();
-    } catch {
-      showToast('error', 'Ошибка при обновлении статуса');
-    }
-  };
-
-  const handleMassExport = () => {
-    const header = 'ФИО,ИНН,Телефон,Статус,Посещений,Потрачено (сом),Дата регистрации,Примечания';
-    const rows = guestsArray.filter(g => selectedGuestIds.includes(g.id)).map(g => {
-      const status = GUEST_STATUSES.find(s => s.value === g.status)?.label || g.status;
-      return `${g.full_name},${g.inn},${g.phone},${status},${g.visits_count || 0},${g.total_spent || 0},${g.registration_date || ''},"${g.notes || ''}"`;
-    });
-    const csv = [header, ...rows].join('\n');
-    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
-    saveAs(blob, 'selected_guests.csv');
-  };
-
-  const startInlineEdit = (guestId: number, field: string, currentValue: string) => {
-    setEditingCell({ guestId, field });
-    setEditingValue(currentValue);
-    setEditingError('');
-  };
-
-  const saveInlineEdit = async () => {
-    if (!editingCell) return;
-    
-    // Валидация
-    const error = validateField(editingCell.field, editingValue);
-    if (error) {
-      setEditingError(error);
-      return;
-    }
-    
-    try {
-      const token = localStorage.getItem('access');
-      const response = await fetch(`${API_URL}/api/guests/${editingCell.guestId}/`, {
-        method: 'PATCH',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`,
-        },
-        body: JSON.stringify({ [editingCell.field]: editingValue }),
-      });
-      
-      if (response.ok) {
-        showToast('success', 'Поле обновлено');
-        fetchGuests();
-        setEditingCell(null);
-        setEditingValue('');
-      } else {
-        throw new Error('Ошибка обновления');
-      }
-    } catch {
-      showToast('error', 'Ошибка при обновлении поля');
-    }
-  };
-
-  const cancelInlineEdit = () => {
-    setEditingCell(null);
-    setEditingValue('');
-    setEditingError('');
-  };
-
-  const validateField = (field: string, value: string): string => {
-    switch (field) {
-      case 'full_name':
-        return value.length < 2 ? 'ФИО должно содержать минимум 2 символа' : '';
-      case 'inn':
-        return value && !/^[0-9]{14}$/.test(value) ? 'ИНН должен содержать ровно 14 цифр' : '';
-      case 'phone':
-        return value && !/^\+\d{7,16}$/.test(value.replace(/\s/g, '')) ? 'Введите корректный номер телефона' : '';
-      default:
-        return '';
-    }
-  };
-
-  const copyToClipboard = (text: string) => {
-    navigator.clipboard.writeText(text);
-    showToast('success', 'Скопировано в буфер обмена');
-  };
-
-  const printGuests = () => {
-    const printWindow = window.open('', '_blank');
-    if (printWindow) {
-      const printContent = `
-        <html>
-          <head>
-            <title>Список гостей</title>
-            <style>
-              body { font-family: Arial, sans-serif; margin: 20px; }
-              table { width: 100%; border-collapse: collapse; }
-              th, td { border: 1px solid #ddd; padding: 8px; text-align: left; }
-              th { background-color: #f2f2f2; }
-              .header { text-align: center; margin-bottom: 20px; }
-            </style>
-          </head>
-          <body>
-            <div class="header">
-              <h1>Список гостей пансионата Фемида</h1>
-              <p>Дата: ${new Date().toLocaleDateString()}</p>
-            </div>
-            <table>
-              <thead>
-                <tr>
-                  <th>ФИО</th>
-                  <th>ИНН</th>
-                  <th>Телефон</th>
-                  <th>Статус</th>
-                  <th>Посещений</th>
-                  <th>Потрачено</th>
-                </tr>
-              </thead>
-              <tbody>
-                ${filteredGuests.map(guest => `
-                  <tr>
-                    <td>${guest.full_name}</td>
-                    <td>${guest.inn}</td>
-                    <td>${guest.phone}</td>
-                    <td>${GUEST_STATUSES.find(s => s.value === guest.status)?.label || guest.status}</td>
-                    <td>${guest.visits_count || 0}</td>
-                    <td>${guest.total_spent ? `${guest.total_spent.toLocaleString()} сом` : '0 сом'}</td>
-                  </tr>
-                `).join('')}
-              </tbody>
-            </table>
-          </body>
-        </html>
-      `;
-      printWindow.document.write(printContent);
-      printWindow.document.close();
-      printWindow.print();
-    }
-  };
-
-  const exportToExcel = () => {
-    const header = 'ФИО,ИНН,Телефон,Статус,Посещений,Потрачено (сом),Дата регистрации,Примечания';
-    const rows = filteredGuests.map(g => {
-      const status = GUEST_STATUSES.find(s => s.value === g.status)?.label || g.status;
-      return `"${g.full_name}","${g.inn}","${g.phone}","${status}",${g.visits_count || 0},${g.total_spent || 0},"${g.registration_date || ''}","${g.notes || ''}"`;
-    });
-    const csv = [header, ...rows].join('\n');
-    const blob = new Blob(['\ufeff' + csv], { type: 'text/csv;charset=utf-8;' });
-    saveAs(blob, 'guests.xlsx');
-    showToast('success', 'Экспорт в Excel выполнен');
-  };
-
-  const saveFilters = () => {
-    const filters = {
-      search,
-      searchField,
-      filterStatus,
-      filterVisitsFrom,
-      filterVisitsTo,
-      filterSpentFrom,
-      filterSpentTo,
-    };
-    setSavedFilters(filters);
-    showToast('success', 'Фильтры сохранены');
-  };
-
-  const loadFilters = () => {
-    if (Object.keys(savedFilters).length > 0) {
-      setSearch(savedFilters.search || '');
-      setSearchField(savedFilters.searchField || 'full_name');
-      setFilterStatus(savedFilters.filterStatus || '');
-      setFilterVisitsFrom(savedFilters.filterVisitsFrom || '');
-      setFilterVisitsTo(savedFilters.filterVisitsTo || '');
-      setFilterSpentFrom(savedFilters.filterSpentFrom || '');
-      setFilterSpentTo(savedFilters.filterSpentTo || '');
-      showToast('success', 'Фильтры загружены');
-    }
-  };
-
-  const clearFilters = () => {
-    setSearch('');
-    setSearchField('full_name');
-    setFilterStatus('');
-    setFilterVisitsFrom('');
-    setFilterVisitsTo('');
-    setFilterSpentFrom('');
-    setFilterSpentTo('');
-    showToast('success', 'Фильтры очищены');
-  };
-
-  return (
-    <div className="p-8">
-      <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 mb-6">
-        <h1 className="text-2xl font-bold">{t('Список гостей')}</h1>
-        <div className="flex gap-2 flex-wrap items-center bg-white rounded-lg shadow px-4 py-2">
-          <select value={searchField} onChange={e => setSearchField(e.target.value)} className="input w-32">
-            <option value="full_name">ФИО</option>
-            <option value="phone">Телефон</option>
-            <option value="inn">ИНН</option>
-          </select>
-          <input
-            type="text"
-            placeholder={`Поиск по ${searchField === 'full_name' ? 'ФИО' : searchField === 'phone' ? 'телефону' : 'ИНН'}`}
-            value={search}
-            onChange={e => setSearch(e.target.value)}
-            className="input w-48"
-          />
-          <select value={filterStatus} onChange={e => setFilterStatus(e.target.value)} className="input w-40">
-            <option value="">Все статусы</option>
-            {GUEST_STATUSES.map(status => (
-              <option key={status.value} value={status.value}>{status.label}</option>
-            ))}
-          </select>
-          <input
-            type="number"
-            placeholder="Посещений от"
-            value={filterVisitsFrom}
-            onChange={e => setFilterVisitsFrom(e.target.value)}
-            className="input w-24"
-          />
-          <input
-            type="number"
-            placeholder="до"
-            value={filterVisitsTo}
-            onChange={e => setFilterVisitsTo(e.target.value)}
-            className="input w-24"
-          />
-          <input
-            type="number"
-            placeholder="Потрачено от"
-            value={filterSpentFrom}
-            onChange={e => setFilterSpentFrom(e.target.value)}
-            className="input w-24"
-          />
-          <input
-            type="number"
-            placeholder="до"
-            value={filterSpentTo}
-            onChange={e => setFilterSpentTo(e.target.value)}
-            className="input w-24"
-          />
-          <button onClick={clearFilters} className="flex items-center gap-2 bg-gray-500 hover:bg-gray-600 text-white px-3 py-2 rounded shadow transition-all duration-200">
-            Сбросить
-          </button>
-          <button onClick={exportToCSV} className="flex items-center gap-2 bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded shadow transition-all duration-200">
-            <FaFileCsv /> Экспорт в CSV
-          </button>
-          <button onClick={exportToExcel} className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded shadow transition-all duration-200">
-            <FaFileCsv /> Excel
-          </button>
-          <button onClick={printGuests} className="flex items-center gap-2 bg-purple-600 hover:bg-purple-700 text-white px-4 py-2 rounded shadow transition-all duration-200">
-            <FaFileCsv /> Печать
-          </button>
-          <button
-            onClick={() => setShowAddModal(true)}
-            className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded shadow transition-all duration-200 ml-2"
-          >
-            <FaPlus /> Добавить гостя
-          </button>
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <div className="text-center">
+          <div className="w-8 h-8 border-4 border-blue-600 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
+          <p className="text-gray-600">Загрузка гостей...</p>
         </div>
       </div>
-      {/* Статистика гостей */}
-      {(() => {
-        const stats = getGuestStatistics();
-        return (
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
-            <div className="bg-white rounded-lg shadow p-4">
-              <div className="flex items-center gap-2">
-                <FaUser className="text-blue-600" />
-                <span className="font-semibold">Всего гостей</span>
-              </div>
-              <div className="text-2xl font-bold text-blue-600">{stats.total}</div>
-            </div>
-            <div className="bg-white rounded-lg shadow p-4">
-              <div className="flex items-center gap-2">
-                <FaCheckCircle className="text-green-600" />
-                <span className="font-semibold">Активных</span>
-              </div>
-              <div className="text-2xl font-bold text-green-600">{stats.active} ({stats.activePercentage}%)</div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="text-center p-8">
+        <p className="text-red-600 mb-4">{error}</p>
+        <button 
+          onClick={fetchGuests}
+          className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+        >
+          Попробовать снова
+        </button>
+      </div>
+    );
+  }
+
+  const stats = getGuestStatistics();
+
+  return (
+    <div className="min-h-screen bg-gray-50">
+      {/* Верхняя панель */}
+      <div className="bg-white border-b border-gray-200 px-6 py-4">
+        <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
+          <div className="flex items-center gap-4">
+            <h1 className="text-2xl font-bold text-gray-900">Гости</h1>
+            <div className="flex items-center gap-2 text-sm text-gray-500">
+              <FaUser className="text-blue-600" />
+              <span>{stats.total} гостей</span>
             </div>
           </div>
-        );
-      })()}
-      {/* Модальное окно добавления гостя */}
-      {showAddModal && (
-        <div className="fixed inset-0 z-40 flex items-center justify-center bg-[#1a1a1a]/60 backdrop-blur-sm animate-fade-in">
-          <div className="bg-white rounded-2xl shadow-2xl p-0 w-full max-w-xl relative animate-modal-in border border-gray-100">
-            <div className="flex flex-col items-center pt-8 pb-2 px-8">
-              <div className="-mt-12 mb-2 flex items-center justify-center">
-                <div className="w-16 h-16 rounded-full bg-blue-100 flex items-center justify-center text-blue-600 text-4xl shadow-lg border-4 border-white -translate-y-4">
-                  <FaUser />
-                </div>
+          
+          <div className="flex items-center gap-3">
+            <button
+              onClick={() => setShowFilters(!showFilters)}
+              className={`flex items-center gap-2 px-4 py-2 rounded-lg border transition-colors ${
+                showFilters 
+                  ? 'bg-blue-50 border-blue-200 text-blue-700' 
+                  : 'bg-white border-gray-300 text-gray-700 hover:bg-gray-50'
+              }`}
+            >
+              <FaFilter />
+              Фильтры
+            </button>
+            
+            <button
+              onClick={exportToCSV}
+              className="flex items-center gap-2 px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg transition-colors"
+            >
+              <FaFileCsv />
+              Экспорт
+            </button>
+            
+            <button
+              onClick={() => setShowModal(true)}
+              className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors"
+            >
+              <FaPlus />
+              Добавить
+            </button>
+          </div>
+        </div>
+      </div>
+
+      {/* Статистика */}
+      <div className="px-6 py-4">
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+          <div className="bg-white rounded-lg shadow-sm p-4 border border-gray-200">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 bg-blue-100 rounded-lg flex items-center justify-center">
+                <FaUser className="text-blue-600" />
               </div>
-              <h2 className="text-2xl font-bold mb-6">Добавить гостя</h2>
-              <button
-                onClick={() => setShowAddModal(false)}
-                className="absolute top-4 right-4 text-gray-400 hover:text-gray-700 text-2xl font-bold focus:outline-none"
-                aria-label="Закрыть"
+              <div>
+                <p className="text-sm text-gray-600">Всего гостей</p>
+                <p className="text-2xl font-bold text-gray-900">{stats.total}</p>
+              </div>
+            </div>
+          </div>
+          
+          <div className="bg-white rounded-lg shadow-sm p-4 border border-gray-200">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 bg-green-100 rounded-lg flex items-center justify-center">
+                <FaCheckCircle className="text-green-600" />
+              </div>
+              <div>
+                <p className="text-sm text-gray-600">Активных</p>
+                <p className="text-2xl font-bold text-gray-900">{stats.active}</p>
+              </div>
+            </div>
+          </div>
+          
+          <div className="bg-white rounded-lg shadow-sm p-4 border border-gray-200">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 bg-orange-100 rounded-lg flex items-center justify-center">
+                <FaCalendarAlt className="text-orange-600" />
+              </div>
+              <div>
+                <p className="text-sm text-gray-600">Забронированных гостей</p>
+                <p className="text-2xl font-bold text-gray-900">{bookedGuestsCount}</p>
+              </div>
+            </div>
+          </div>
+          
+          <div className="bg-white rounded-lg shadow-sm p-4 border border-gray-200">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 bg-green-100 rounded-lg flex items-center justify-center">
+                <FaCreditCard className="text-green-600" />
+              </div>
+              <div>
+                <p className="text-sm text-gray-600">Оплачено</p>
+                <p className="text-2xl font-bold text-gray-900">{Math.round(totalPaid).toLocaleString()} сом</p>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Фильтры */}
+      {showFilters && (
+        <div className="px-6 py-4 bg-white border-b border-gray-200">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Поиск</label>
+              <div className="relative">
+                <FaSearch className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" />
+                <input
+                  type="text"
+                  value={filters.search}
+                  onChange={(e) => setFilters(prev => ({ ...prev, search: e.target.value }))}
+                  className="w-full pl-10 pr-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  placeholder="ФИО, телефон, ИНН..."
+                />
+              </div>
+            </div>
+            
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Статус</label>
+              <select
+                value={filters.status}
+                onChange={(e) => setFilters(prev => ({ ...prev, status: e.target.value }))}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
               >
-                ×
-              </button>
-              <form onSubmit={handleAddSubmit} className="w-full grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div className="flex flex-col gap-2 md:col-span-2">
-                  <label className="font-semibold">ФИО</label>
-                  <input name="full_name" value={addForm.full_name} onChange={handleAddChange} required className="input" placeholder="Ваше фамилия имя и отчество" />
-                </div>
-                <div className="flex flex-col gap-2 md:col-span-2">
-                  <label className="font-semibold">ИНН</label>
-                  <input name="inn" value={addForm.inn} onChange={handleAddChange} required className="input" placeholder="ИНН 14 цифр" />
-                </div>
-                <div className="flex flex-col gap-2 md:col-span-2">
-                  <label className="font-semibold">Телефон</label>
-                  <PhoneInput
-                    country={'kg'}
-                    value={addForm.phone.replace('+', '')}
-                    onChange={handlePhoneChange}
-                    inputClass="!w-full !text-base !py-2"
-                    buttonClass="!bg-gray-100"
-                    containerClass="!w-full"
-                    placeholder="Телефон"
-                    enableSearch
-                  />
-                </div>
-                <div className="flex flex-col gap-2 md:col-span-2">
-                  <label className="font-semibold">Статус</label>
-                  <select name="status" value={addForm.status} onChange={handleAddChange} className="input">
-                    {GUEST_STATUSES.map(status => (
-                      <option key={status.value} value={status.value}>{status.label}</option>
-                    ))}
-                  </select>
-                </div>
-                <div className="flex flex-col gap-2 md:col-span-2">
-                  <label className="font-semibold">Примечания</label>
-                  <textarea name="notes" value={addForm.notes} onChange={handleAddChange} className="input" rows={3} placeholder="Дополнительная информация о госте..." />
-                </div>
-                <div className="md:col-span-2 flex justify-end mt-4">
-                  <button
-                    type="submit"
-                    disabled={addLoading}
-                    className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white px-6 py-2 rounded shadow transition-all duration-200 disabled:opacity-60 disabled:cursor-not-allowed"
-                  >
-                    <FaUser /> {addLoading ? 'Добавление...' : 'Добавить'}
-                  </button>
-                </div>
-                {addError && <div className="text-red-500 md:col-span-2">{addError}</div>}
-                {addSuccess && <div className="text-green-600 md:col-span-2">Гость успешно добавлен!</div>}
-              </form>
+                <option value="">Все статусы</option>
+                {GUEST_STATUSES.map(status => (
+                  <option key={status.value} value={status.value}>{status.label}</option>
+                ))}
+              </select>
+            </div>
+            
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Оплачено</label>
+              <div className="flex gap-2">
+                <input
+                  type="number"
+                  value={filters.spentFrom}
+                  onChange={(e) => setFilters(prev => ({ ...prev, spentFrom: e.target.value }))}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  placeholder="От"
+                />
+                <input
+                  type="number"
+                  value={filters.spentTo}
+                  onChange={(e) => setFilters(prev => ({ ...prev, spentTo: e.target.value }))}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  placeholder="До"
+                />
+              </div>
             </div>
           </div>
         </div>
       )}
-      {/* Современный list-view гостей */}
-      {loading ? (
-        <div className="text-center text-gray-500">Загрузка...</div>
-      ) : error ? (
-        <div className="text-red-500 mb-4">{error}</div>
-      ) : (
-        <div className="space-y-3">
-          <div className="overflow-x-auto rounded-lg shadow max-w-full">
-            <table className="w-full bg-white rounded-lg">
+
+      {/* Контент */}
+      <div className="px-6 py-6">
+        {paginatedGuests.length === 0 ? (
+          <div className="text-center py-12">
+            <FaUser className="text-gray-400 text-6xl mx-auto mb-4" />
+            <h3 className="text-lg font-medium text-gray-900 mb-2">Нет гостей</h3>
+            <p className="text-gray-500 mb-4">
+              {filters.search || filters.status || filters.spentFrom
+                ? 'Попробуйте изменить фильтры'
+                : 'Добавьте первого гостя'
+              }
+            </p>
+            {!filters.search && !filters.status && !filters.spentFrom && (
+              <button
+                onClick={() => setShowModal(true)}
+                className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors mx-auto"
+              >
+                <FaPlus />
+                Добавить гостя
+              </button>
+            )}
+          </div>
+        ) : (
+          <div className='rounded-lg shadow bg-white w-full'>
+            <table className='w-full text-sm'>
               <thead>
-                <tr className="bg-gray-50 text-gray-700">
-                  <th className="p-3 text-left">
-                    <input type="checkbox" checked={selectAll} onChange={handleSelectAll} />
+                <tr className='bg-gray-50 text-gray-700'>
+                  <th className='p-3 text-left '>
+                    <input
+                      type='checkbox'
+                      checked={selectedGuestIds.length === paginatedGuests.length && paginatedGuests.length > 0}
+                      onChange={handleSelectAll}
+                      className='rounded border-gray-300 text-blue-600 focus:ring-blue-500'
+                    />
                   </th>
-                  <th className="p-2 text-left" onClick={() => handleSort('full_name')}>ФИО {sortState.field === 'full_name' && (sortState.order === 'asc' ? '▲' : sortState.order === 'desc' ? '▼' : '')}</th>
-                  <th className="p-2 text-left" onClick={() => handleSort('inn')}>ИНН {sortState.field === 'inn' && (sortState.order === 'asc' ? '▲' : sortState.order === 'desc' ? '▼' : '')}</th>
-                  <th className="p-2 text-left" onClick={() => handleSort('phone')}>Телефон {sortState.field === 'phone' && (sortState.order === 'asc' ? '▲' : sortState.order === 'desc' ? '▼' : '')}</th>
-                  <th className="p-2 text-left" onClick={() => handleSort('status')}>Статус {sortState.field === 'status' && (sortState.order === 'asc' ? '▲' : sortState.order === 'desc' ? '▼' : '')}</th>
-                  <th className="p-2 text-left" onClick={() => handleSort('visits_count')}>Посещения {sortState.field === 'visits_count' && (sortState.order === 'asc' ? '▲' : sortState.order === 'desc' ? '▼' : '')}</th>
-                  <th className="p-2 text-left" onClick={() => handleSort('total_spent')}>Потрачено {sortState.field === 'total_spent' && (sortState.order === 'asc' ? '▲' : sortState.order === 'desc' ? '▼' : '')}</th>
-                  <th className="p-2 text-left">Бронирования</th>
-                  <th className="p-2 text-left">Действия</th>
+                  <th className='p-3 text-center '>Гость</th>
+                  <th className='p-3 text-center '>ПИН</th>
+                  <th className='p-3 text-center '>Контакты</th>
+                  <th className='p-3 text-center '>Бронирование</th>
+                  <th className='p-3 text-center '>Статус</th>
+                  <th className='p-3 text-center '>Оплачено</th>
+                  <th className='p-3 text-center'>Действия</th>
                 </tr>
               </thead>
               <tbody>
-                {sortedGuests.map(guest => (
-                  <tr key={guest.id} className="hover:bg-blue-50 transition-all cursor-pointer" onClick={() => openGuestPanel(guest)}>
-                    <td className="p-3">
+                {paginatedGuests.map((guest, idx) => (
+                  <tr key={guest.id} className={`transition-all border-b last:border-b-0 ${idx % 2 === 1 ? 'bg-gray-50' : 'bg-white'} hover:bg-blue-50`}>
+                    <td className='p-3 text-left '>
                       <input
-                        type="checkbox"
+                        type='checkbox'
                         checked={selectedGuestIds.includes(guest.id)}
-                        onChange={e => { e.stopPropagation(); handleSelectGuest(guest.id); }}
-                        onClick={e => e.stopPropagation()}
+                        onChange={() => handleSelectGuest(guest.id)}
+                        className='rounded border-gray-300 text-blue-600 focus:ring-blue-500'
                       />
                     </td>
-                    <td className="p-2 truncate max-w-[120px]" title={guest.full_name}>{guest.full_name}</td>
-                    <td className="p-2">{guest.inn}</td>
-                    <td className="p-2">{guest.phone}</td>
-                    <td className="p-2">
+                    <td className='p-3 text-center '>
+                      <span className='font-medium text-gray-900'>{guest.full_name}</span>
+                      <div className='text-xs text-gray-500'>ID: {guest.id}</div>
+                    </td>
+                    <td className='p-3 text-center '>
+                      <span className='text-sm font-mono'>{guest.inn}</span>
+                    </td>
+                    <td className='p-3 text-center '>
+                      <span className='flex items-center gap-2 text-sm justify-center'>
+                        <FaPhone className='text-gray-400' />
+                        {guest.phone}
+                      </span>
+                    </td>
+                    <td className='p-3 text-center'>
+                      {(() => {
+                        const guestBookings = bookings.filter(b => 
+                          (typeof b.guest === 'object' ? b.guest.id : b.guest) === guest.id
+                        );
+                        if (guestBookings.length === 0) return 'Не забронирован';
+                        const active = guestBookings.find(b => b.status === 'active');
+                        if (active) return 'Забронирован';
+                        const cancelled = guestBookings.find(b => b.status === 'cancelled');
+                        if (cancelled) return 'Отменён';
+                        return 'Не забронирован';
+                      })()}
+                    </td>
+                    <td className='p-3 text-center '>
                       {(() => {
                         const status = GUEST_STATUSES.find(s => s.value === guest.status);
                         return (
-                          <span className={`inline-block px-2 py-1 rounded-full text-xs font-semibold ${status?.color || 'bg-gray-200 text-gray-800'}`}>
+                          <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${status?.color || 'bg-gray-100 text-gray-800'}`}>
                             {status?.label || guest.status}
                           </span>
                         );
                       })()}
                     </td>
-                    <td className="p-2 text-center">{guest.visits_count || 0}</td>
-                    <td className="p-2 font-semibold text-green-600">{guest.total_spent ? `${guest.total_spent.toLocaleString()} сом` : '0 сом'}</td>
-                    <td className="p-2">
-                      <span className="inline-block px-2 py-1 rounded-full text-xs font-semibold bg-blue-100 text-blue-800">
-                        {getBookingCount(guest.id)}
+                    <td className='p-3 text-center'>
+                      <span className='font-medium text-green-600'>
+                        {(() => {
+                          const guestBookings = bookings.filter(b => 
+                            (typeof b.guest === 'object' ? b.guest.id : b.guest) === guest.id
+                          );
+                          const paidBookings = guestBookings.filter(b => b.payment_status === 'paid');
+                          const totalPaid = paidBookings.reduce((sum, b) => sum + (b.total_amount || 0), 0);
+                          return totalPaid > 0 ? `${Math.round(totalPaid).toLocaleString()} сом` : 'Нет';
+                        })()}
                       </span>
                     </td>
-                    <td className="p-2 flex gap-2">
-                      <button 
-                        onClick={(e) => { e.stopPropagation(); copyToClipboard(guest.full_name); }} 
-                        className="text-blue-600 hover:text-blue-800" 
-                        title="Копировать ФИО"
-                      >
-                        <FaFileCsv />
-                      </button>
-                      <button 
-                        onClick={(e) => { e.stopPropagation(); copyToClipboard(guest.phone); }} 
-                        className="text-green-600 hover:text-green-800" 
-                        title="Копировать телефон"
-                      >
-                        <FaFileCsv />
-                      </button>
-                      <button onClick={(e) => { e.stopPropagation(); handleEdit(guest); }} className="text-yellow-600 hover:text-yellow-800" title="Редактировать"><FaEdit /></button>
-                      <button onClick={(e) => { e.stopPropagation(); handleDelete(guest.id); }} className="text-red-600 hover:text-red-800" title="Удалить"><FaTrash /></button>
+                    <td className='p-3 text-center'>
+                      <div className='flex items-center gap-2 justify-center'>
+                        <button
+                          onClick={() => handleEdit(guest)}
+                          className='bg-blue-100 hover:bg-blue-200 text-blue-700 px-3 py-1 rounded font-semibold flex items-center gap-1 text-xs'
+                          title='Редактировать'
+                        >
+                          <FaEdit /> Ред.
+                        </button>
+                        <button
+                          onClick={() => handleDelete(guest.id)}
+                          className='bg-red-100 hover:bg-red-200 text-red-700 px-3 py-1 rounded font-semibold flex items-center gap-1 text-xs'
+                          title='Удалить'
+                        >
+                          <FaTrash /> Удалить
+                        </button>
+                      </div>
                     </td>
                   </tr>
                 ))}
               </tbody>
             </table>
           </div>
-          
-          {/* Пагинация */}
-          {totalPages > 1 && (
-            <div className="flex justify-center items-center gap-2 mt-4">
-              <button
-                className="px-3 py-1 rounded bg-gray-100 hover:bg-gray-200 text-gray-700 disabled:opacity-50"
-                onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
-                disabled={currentPage === 1}
-              >
-                Назад
-              </button>
-              <span className="text-sm text-gray-500">Страница {currentPage} из {totalPages}</span>
-              <button
-                className="px-3 py-1 rounded bg-gray-100 hover:bg-gray-200 text-gray-700 disabled:opacity-50"
-                onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
-                disabled={currentPage === totalPages}
-              >
-                Вперёд
-              </button>
-            </div>
-          )}
-        </div>
-      )}
-      {editGuest && (
-        <div className="fixed inset-0 bg-black/30 flex items-center justify-center z-50">
-          <div className="bg-white rounded-xl shadow-xl p-8 w-full max-w-lg animate-fade-in">
-            <h2 className="text-xl font-bold mb-4 flex items-center gap-2"><FaEdit /> Редактировать гостя</h2>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div className="flex flex-col gap-2">
-                <label className="font-semibold">ФИО</label>
-                <input type="text" value={fullName} onChange={e => setFullName(e.target.value)} className="input" />
-              </div>
-              <div className="flex flex-col gap-2">
-                <label className="font-semibold">ИНН</label>
-                <input type="text" value={inn} onChange={e => setInn(e.target.value)} className="input" />
-              </div>
-              <div className="flex flex-col gap-2">
-                <label className="font-semibold">Телефон</label>
-                <input type="text" value={phone} onChange={e => setPhone(e.target.value)} className="input" />
-              </div>
-            </div>
-            <div className="flex gap-2 mt-6 justify-end">
-              <button onClick={handleEditSave} className="flex items-center gap-1 bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded shadow transition-all"><FaEdit />Сохранить</button>
-              <button onClick={() => setEditGuest(null)} className="flex items-center gap-1 bg-gray-400 hover:bg-gray-500 text-white px-4 py-2 rounded shadow transition-all">Отмена</button>
-            </div>
-          </div>
-        </div>
-      )}
-      <ConfirmModal
-        open={showConfirmDelete}
-        title="Удалить гостя?"
-        description="Вы действительно хотите удалить этого гостя? Это действие необратимо."
-        confirmText="Удалить"
-        cancelText="Отмена"
-        onConfirm={confirmDelete}
-        onCancel={() => { setShowConfirmDelete(false); setSelectedDeleteId(null); }}
-      />
-      {/* Toast уведомления */}
-      {toast && (
-        <div className={`fixed top-4 right-4 z-50 p-4 rounded-lg shadow-lg transition-all duration-300 ${
-          toast.type === 'success' 
-            ? 'bg-green-500 text-white' 
-            : 'bg-red-500 text-white'
-        }`}>
-          <div className="flex items-center gap-2">
-            {toast.type === 'success' ? <FaCheckCircle /> : <FaTimesCircle />}
-            <span>{toast.message}</span>
-          </div>
-        </div>
-      )}
-      {showGuestPanel && selectedGuest && (
-        <div className="fixed inset-0 z-50 flex">
-          {/* Тёмный фон */}
-          <div className="fixed inset-0 bg-black/30" onClick={closeGuestPanel}></div>
-          {/* Sidepanel */}
-          <div className="relative ml-auto w-full max-w-md bg-white h-full shadow-2xl animate-slide-in-right flex flex-col">
-            <div className="flex items-center justify-between p-6 border-b">
-              <div className="flex items-center gap-2">
-                <FaUser className="text-2xl text-blue-600" />
-                <span className="text-xl font-bold">{selectedGuest.full_name}</span>
-              </div>
-              <button onClick={closeGuestPanel} className="text-2xl text-gray-400 hover:text-gray-700">×</button>
-            </div>
-            <div className="p-6 space-y-4 flex-1 overflow-y-auto">
-              <div className="flex flex-col gap-2">
-                <span className="text-gray-500 text-xs">Телефон:</span>
-                <span className="font-semibold">{selectedGuest.phone}</span>
-              </div>
-              <div className="flex flex-col gap-2">
-                <span className="text-gray-500 text-xs">ИНН:</span>
-                <span>{selectedGuest.inn || '-'}</span>
-              </div>
-              <div className="flex flex-col gap-2">
-                <span className="text-gray-500 text-xs">Статус:</span>
-                <span>{GUEST_STATUSES.find(s => s.value === selectedGuest.status)?.label || selectedGuest.status}</span>
-              </div>
-              <div className="flex flex-col gap-2">
-                <span className="text-gray-500 text-xs">Дата регистрации:</span>
-                <span>{selectedGuest.registration_date || '-'}</span>
-              </div>
-              <div className="flex flex-col gap-2">
-                <span className="text-gray-500 text-xs">Посещений:</span>
-                <span>{selectedGuest.visits_count || 0}</span>
-              </div>
-              <div className="flex flex-col gap-2">
-                <span className="text-gray-500 text-xs">Потрачено:</span>
-                <span className="font-semibold text-green-600">{selectedGuest.total_spent ? `${selectedGuest.total_spent.toLocaleString()} сом` : '0 сом'}</span>
-              </div>
-              {selectedGuest.notes && (
-                <div className="flex flex-col gap-2">
-                  <span className="text-gray-500 text-xs">Примечания:</span>
-                  <span>{selectedGuest.notes}</span>
-                </div>
-              )}
-              <div className="mt-6 pt-4 border-t">
+        )}
 
+        {/* Пагинация */}
+        {totalPages > 1 && (
+          <div className="px-6 py-4 bg-white border-t border-gray-200">
+            <div className="flex items-center justify-between">
+              <div className="text-sm text-gray-700">
+                Показано {((currentPage - 1) * guestsPerPage) + 1} - {Math.min(currentPage * guestsPerPage, filteredGuests.length)} из {filteredGuests.length}
               </div>
-              {/* История бронирований */}
-              <div className="mt-6">
-                <span className="font-semibold text-gray-700">История бронирований:</span>
-                <ul className="mt-2 space-y-2">
-                  {bookings.filter(b => b.guest?.id === selectedGuest.id).length === 0 && (
-                    <li className="text-gray-400 text-sm">Нет бронирований</li>
-                  )}
-                  {bookings.filter(b => b.guest?.id === selectedGuest.id).map(b => (
-                    <li key={b.id} className="p-2 bg-gray-50 rounded shadow flex flex-col gap-1">
-                      <span className="text-sm font-semibold">{b.room?.number} ({b.room?.building?.name})</span>
-                      <span className="text-xs text-gray-500">{b.check_in} — {b.check_out}</span>
-                      <span className="text-xs">Статус: {b.status}</span>
-                      <span className="text-xs">Оплата: {b.payment_status} ({b.payment_amount} сом)</span>
-                    </li>
-                  ))}
-                </ul>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
+                  disabled={currentPage === 1}
+                  className="px-3 py-1 text-sm border border-gray-300 rounded hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  Назад
+                </button>
+                <span className="px-3 py-1 text-sm text-gray-700">
+                  {currentPage} из {totalPages}
+                </span>
+                <button
+                  onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
+                  disabled={currentPage === totalPages}
+                  className="px-3 py-1 text-sm border border-gray-300 rounded hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  Вперёд
+                </button>
               </div>
             </div>
           </div>
-        </div>
-      )}
+        )}
+      </div>
+
+      {/* Массовые действия */}
       {selectedGuestIds.length > 0 && (
         <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-40 flex gap-4 bg-white shadow-xl rounded-full px-6 py-3 border items-center animate-fade-in">
           <span className="font-semibold text-blue-700">Выбрано: {selectedGuestIds.length}</span>
           <button
             className="bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded shadow flex items-center gap-2"
-            onClick={() => handleMassDelete()}
+            onClick={handleMassDelete}
           >
             <FaTrash /> Удалить
           </button>
-          <select
-            className="input"
-            onChange={e => handleMassStatusChange(e.target.value)}
-            defaultValue=""
-          >
-            <option value="" disabled>Сменить статус</option>
-            {GUEST_STATUSES.map(s => (
-              <option key={s.value} value={s.value}>{s.label}</option>
-            ))}
-          </select>
-          <button
-            className="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded shadow flex items-center gap-2"
-            onClick={handleMassExport}
-          >
-            <FaFileCsv /> Экспорт
-          </button>
           <button
             className="bg-gray-400 hover:bg-gray-500 text-white px-4 py-2 rounded shadow flex items-center gap-2"
-            onClick={() => { setSelectedGuestIds([]); setSelectAll(false); }}
+            onClick={() => { setSelectedGuestIds([]); }}
           >
             Отмена
           </button>
         </div>
       )}
+
+      {/* Модалка */}
+      <GuestModal
+        open={showModal}
+        onClose={() => {
+          setShowModal(false);
+          setEditingGuest(null);
+        }}
+        onSave={handleSave}
+        initial={editingGuest}
+      />
+
+      {/* Модалка подтверждения удаления */}
+      <ConfirmModal
+        open={showConfirmDelete}
+        title="Удалить гостя?"
+        description={
+          Array.isArray(deleteTarget) 
+            ? `Вы действительно хотите удалить ${deleteTarget.length} гостей? Это действие необратимо.`
+            : "Вы действительно хотите удалить этого гостя? Это действие необратимо."
+        }
+        confirmText="Удалить"
+        cancelText="Отмена"
+        onConfirm={confirmDelete}
+        onCancel={() => {
+          setShowConfirmDelete(false);
+          setDeleteTarget(null);
+        }}
+      />
     </div>
   );
 }

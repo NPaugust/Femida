@@ -1,4 +1,5 @@
 from rest_framework import serializers
+from django.db.models import Sum
 from .models import User, Room, Guest, Booking, AuditLog, Building
 import logging
 
@@ -23,6 +24,14 @@ class UserSerializer(serializers.ModelSerializer):
             user.save()
         return user
 
+    def update(self, instance, validated_data):
+        password = validated_data.pop('password', None)
+        user = super().update(instance, validated_data)
+        if password:
+            user.set_password(password)
+            user.save()
+        return user
+
 class BuildingSerializer(serializers.ModelSerializer):
     class Meta:
         model = Building
@@ -31,28 +40,72 @@ class BuildingSerializer(serializers.ModelSerializer):
 class RoomSerializer(serializers.ModelSerializer):
     building = serializers.SerializerMethodField()
     building_id = serializers.PrimaryKeyRelatedField(queryset=Building.objects.all(), source='building', write_only=True)
-    room_class = serializers.SerializerMethodField()
+    # room_class теперь двустороннее поле (и на чтение, и на запись)
+    room_class = serializers.CharField(required=True)
+    room_class_display = serializers.SerializerMethodField(read_only=True)
+    
     def get_building(self, obj):
-        # Если obj — это dict (bulk create), берем из словаря
         if isinstance(obj, dict):
             return {'id': obj['building'], 'name': ''}
-        # Если obj — это модель Room
         return {'id': obj.building.id, 'name': obj.building.name}
-    def get_room_class(self, obj):
+    
+    def get_room_class_display(self, obj):
         return {'value': obj.room_class, 'label': obj.get_room_class_display()}
+    
+    def validate_status(self, value):
+        """Валидация статуса номера"""
+        if self.instance and value == 'free':
+            # Проверяем, есть ли активные бронирования для этого номера
+            active_bookings = self.instance.bookings.filter(
+                status='active',
+                is_deleted=False
+            )
+            if active_bookings.exists():
+                raise serializers.ValidationError(
+                    "Номер забронирован. Сначала отмените или завершите бронирование."
+                )
+        return value
+    
+    def validate_capacity(self, value):
+        """Валидация вместимости"""
+        if value < 1:
+            raise serializers.ValidationError("Вместимость должна быть больше 0")
+        if value > 10:
+            raise serializers.ValidationError("Вместимость не может быть больше 10")
+        return value
+    
+    def validate_price_per_night(self, value):
+        """Валидация цены"""
+        if value < 0:
+            raise serializers.ValidationError("Цена не может быть отрицательной")
+        return value
+    
     class Meta:
         model = Room
         fields = [
-            'id', 'building', 'building_id', 'number', 'capacity', 'room_type', 'room_class', 'status', 'description',
+            'id', 'building', 'building_id', 'number', 'capacity', 'room_type', 'room_class', 'room_class_display', 'status', 'description',
             'is_active', 'price_per_night', 'rooms_count', 'amenities', 'is_deleted'
         ]
         read_only_fields = ['is_deleted']
 
 class GuestSerializer(serializers.ModelSerializer):
+    total_spent = serializers.SerializerMethodField()
+    
     class Meta:
         model = Guest
         fields = '__all__'
         read_only_fields = ['is_deleted']
+    
+    def get_total_spent(self, obj):
+        """Вычисляет общую сумму оплаченных бронирований гостя"""
+        from decimal import Decimal
+        total = obj.bookings.filter(
+            payment_status='paid',
+            is_deleted=False
+        ).aggregate(
+            total=Sum('total_amount')
+        )['total'] or Decimal('0')
+        return str(total)
 
     def validate_full_name(self, value):
         """Валидация ФИО"""
@@ -125,7 +178,7 @@ class BookingSerializer(serializers.ModelSerializer):
     guest_id = serializers.PrimaryKeyRelatedField(queryset=Guest.objects.all(), source='guest', write_only=True)
     room = serializers.SerializerMethodField()
     room_id = serializers.PrimaryKeyRelatedField(queryset=Room.objects.all(), source='room', write_only=True)
-    # Удаляем date_from и date_to
+    
     def get_room(self, obj):
         r = obj.room
         return {
@@ -136,7 +189,58 @@ class BookingSerializer(serializers.ModelSerializer):
             'capacity': r.capacity,
             'room_type': r.room_type,
             'status': r.status,
+            'price_per_night': r.price_per_night,
         }
+    
+    def validate(self, data):
+        """Валидация данных бронирования"""
+        check_in = data.get('check_in')
+        check_out = data.get('check_out')
+        people_count = data.get('people_count')
+        room = data.get('room')
+        
+        # Валидация дат
+        if check_in and check_out:
+            if check_in >= check_out:
+                raise serializers.ValidationError(
+                    "Дата выезда должна быть позже даты заезда"
+                )
+            
+            # Проверяем, что дата заезда не в прошлом
+            from django.utils import timezone
+            if check_in < timezone.now():
+                raise serializers.ValidationError(
+                    "Дата заезда не может быть в прошлом"
+                )
+        
+        # Валидация количества гостей
+        if people_count and room:
+            if people_count > room.capacity:
+                raise serializers.ValidationError(
+                    f"Номер вмещает максимум {room.capacity} гостей"
+                )
+            if people_count < 1:
+                raise serializers.ValidationError(
+                    "Количество гостей должно быть больше 0"
+                )
+        
+        # Проверка доступности номера
+        if check_in and check_out and room:
+            conflicting_bookings = Booking.objects.filter(
+                room=room,
+                status='active',
+                is_deleted=False
+            ).exclude(id=self.instance.id if self.instance else None)
+            
+            # Проверяем пересечение дат
+            for booking in conflicting_bookings:
+                if (check_in < booking.check_out and check_out > booking.check_in):
+                    raise serializers.ValidationError(
+                        f"Номер уже забронирован на эти даты (бронирование #{booking.id})"
+                    )
+        
+        return data
+    
     class Meta:
         model = Booking
         fields = [
@@ -145,7 +249,7 @@ class BookingSerializer(serializers.ModelSerializer):
             'payment_status', 'payment_amount', 'payment_method', 'comments', 'total_amount',
             'created_by', 'created_at', 'is_deleted'
         ]
-        read_only_fields = ['created_by', 'created_at', 'total_amount', 'is_deleted']
+        read_only_fields = ['created_by', 'created_at', 'is_deleted']
 
 class AuditLogSerializer(serializers.ModelSerializer):
     class Meta:

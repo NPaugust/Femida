@@ -17,8 +17,8 @@ Including another URLconf
 from django.contrib import admin
 from django.urls import path, include
 from rest_framework import routers
-from booking.views import UserViewSet, RoomViewSet, GuestViewSet, BookingViewSet, BuildingViewSet, AuditLogViewSet, TrashViewSet
-from rest_framework_simplejwt.views import TokenObtainPairView, TokenRefreshView
+from booking.views import UserViewSet, RoomViewSet, GuestViewSet, BookingViewSet, BuildingViewSet, AuditLogViewSet, TrashViewSet, CustomTokenObtainPairView
+from rest_framework_simplejwt.views import TokenRefreshView
 from drf_yasg.views import get_schema_view
 from drf_yasg import openapi
 from rest_framework.permissions import AllowAny
@@ -46,7 +46,7 @@ router.register(r'auditlog', AuditLogViewSet)
 urlpatterns = [
     path('admin/', admin.site.urls),
     path('api/', include(router.urls)),
-    path('api/auth/token/', TokenObtainPairView.as_view(), name='token_obtain_pair'),
+    path('api/auth/token/', CustomTokenObtainPairView.as_view(), name='token_obtain_pair'),
     path('api/auth/token/refresh/', TokenRefreshView.as_view(), name='token_refresh'),
     path('api/docs/', schema_view.with_ui('swagger', cache_timeout=0), name='schema-swagger-ui'),
     path('api/trash/<str:obj_type>/', TrashViewSet.as_view()),

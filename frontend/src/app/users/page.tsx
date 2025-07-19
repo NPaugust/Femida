@@ -10,6 +10,7 @@ import PhoneInput from 'react-phone-input-2';
 import 'react-phone-input-2/lib/style.css';
 import { API_URL } from '../../shared/api';
 import ConfirmModal from '../../components/ConfirmModal';
+import Pagination from '../../components/Pagination';
 
 type User = {
   id: number;
@@ -59,7 +60,7 @@ export default function UsersPage() {
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [deleteUserId, setDeleteUserId] = useState<number|null>(null);
   const [currentPage, setCurrentPage] = useState(1);
-  const usersPerPage = 10;
+  const usersPerPage = 9;
   const [showConfirmDelete, setShowConfirmDelete] = useState(false);
   const [selectedDeleteId, setSelectedDeleteId] = useState<number | null>(null);
 
@@ -153,11 +154,14 @@ export default function UsersPage() {
   const validateAddForm = () => {
     const errors: any = {};
     if (!addForm.username) errors.username = 'Обязательное поле';
-    if (!addForm.first_name) errors.first_name = 'Обязательное поле';
-    if (!addForm.last_name) errors.last_name = 'Обязательное поле';
     if (!addForm.role) errors.role = 'Обязательное поле';
     if (!addForm.phone || addForm.phone.length < 10) errors.phone = 'Введите корректный телефон';
-    if (!addForm.password || addForm.password.length < 8) errors.password = 'Минимум 8 символов';
+    
+    // Пароль обязателен только при создании нового пользователя
+    if (!editUser && !addForm.password) {
+      errors.password = 'Пароль обязателен для нового пользователя';
+    }
+    
     return errors;
   };
   
@@ -175,13 +179,18 @@ export default function UsersPage() {
       let res;
       if (editUser) {
         // PATCH для редактирования
+        const updateData: any = { ...addForm };
+        // Не отправляем пароль, если он не изменен
+        if (!updateData.password) {
+          delete updateData.password;
+        }
         res = await fetch(`${API_URL}/api/users/${editUser.id}/`, {
           method: 'PATCH',
           headers: {
             'Content-Type': 'application/json',
             Authorization: `Bearer ${token}`,
           },
-          body: JSON.stringify(addForm),
+          body: JSON.stringify(updateData),
         });
       } else {
         // POST для создания
@@ -283,7 +292,7 @@ export default function UsersPage() {
             onChange={e => setOnlineFilter(e.target.value)}
             className="px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
           >
-            <option value="">Все пользователи</option>
+            <option value="">Все сотрудники</option>
             <option value="online">Только онлайн</option>
             <option value="offline">Только офлайн</option>
           </select>
@@ -387,14 +396,15 @@ export default function UsersPage() {
                   {addFieldErrors.phone && <span className="text-red-500 text-xs">{addFieldErrors.phone}</span>}
                 </div>
                 <div className="flex flex-col gap-1 md:col-span-1">
-                  <label className="font-semibold text-sm">Пароль *</label>
+                  <label className="font-semibold text-sm">Пароль {!editUser && '*'}</label>
                   <input
                     name="password"
                     type="password"
                     value={addForm.password}
                     onChange={handleAddChange}
                     className={`input w-full h-11 px-4 rounded border border-gray-300 focus:ring-2 focus:ring-blue-500 ${addFieldErrors.password ? 'border-red-500' : ''}`}
-                    required
+                    required={!editUser}
+                    placeholder={editUser ? 'Оставьте пустым, если не хотите менять' : ''}
                   />
                   {addFieldErrors.password && <span className="text-red-500 text-xs">{addFieldErrors.password}</span>}
                 </div>
@@ -415,37 +425,37 @@ export default function UsersPage() {
         </div>
       )}
 
-      <div className="overflow-x-auto rounded-lg shadow max-w-full">
-        <table className="w-full bg-white rounded-lg">
+      <div className='rounded-lg shadow bg-white w-full'>
+        <table className='w-full text-sm'>
           <thead>
-            <tr className="bg-gray-50 text-gray-700">
-              <th className="p-2 text-left">Пользователь</th>
-              <th className="p-2 text-left">Роль</th>
-              <th className="p-2 text-left">Контакты</th>
-              <th className="p-2 text-left">Статус</th>
-              <th className="p-2 text-left">Действия</th>
+            <tr className='bg-gray-50 text-gray-700'>
+              <th className="p-3 text-center">Пользователь</th>
+              <th className="p-3 text-center">Роль</th>
+              <th className="p-3 text-center">Контакты</th>
+              <th className="p-3 text-center">Статус</th>
+              <th className="p-3 text-center">Действия</th>
             </tr>
           </thead>
           <tbody>
             {paginatedUsers.map(user => (
               <tr key={user.id} className="hover:bg-blue-50 transition-all">
-                <td className="p-2 truncate max-w-[120px]" title={`${user.first_name} ${user.last_name}`}>{user.first_name} {user.last_name}</td>
-                <td className="p-2">
+                <td className="p-3 text-center">{user.first_name} {user.last_name}</td>
+                <td className="p-3 text-center">
                   <span className={`inline-flex items-center px-2 py-1 rounded text-xs font-semibold ${roleColors[user.role] || 'bg-gray-100 text-gray-700'}`}>
                     {roleIcons[user.role]}
                     {roleLabels[user.role] || user.role}
                   </span>
                 </td>
-                <td className="p-2">
+                <td className="p-3 text-center">
                   <div className="text-sm">{user.phone}</div>
                 </td>
-                <td className="p-2">
+                <td className="p-3 text-center">
                   <span className={`inline-flex items-center gap-1 px-2 py-1 rounded text-xs font-semibold ${user.is_online ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-500'}`}>
                     <span className={`w-2 h-2 rounded-full ${user.is_online ? 'bg-green-500' : 'bg-gray-400'}`}></span>
                     {user.is_online ? 'Онлайн' : 'Офлайн'}
                   </span>
                 </td>
-                <td className="p-2">
+                <td className="p-3 text-center">
                   <div className="flex gap-2">
                     <button onClick={() => openEditModal(user)} className="text-yellow-600 hover:text-yellow-800" title="Редактировать">
                       <FaEdit />
@@ -464,21 +474,11 @@ export default function UsersPage() {
       {/* Пагинация */}
       {totalPages > 1 && (
         <div className="flex justify-center items-center gap-2 mt-4">
-          <button
-            className="px-3 py-1 rounded bg-gray-100 hover:bg-gray-200 text-gray-700 disabled:opacity-50"
-            onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
-            disabled={currentPage === 1}
-          >
-            Назад
-          </button>
-          <span className="text-sm text-gray-500">Страница {currentPage} из {totalPages}</span>
-          <button
-            className="px-3 py-1 rounded bg-gray-100 hover:bg-gray-200 text-gray-700 disabled:opacity-50"
-            onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
-            disabled={currentPage === totalPages}
-          >
-            Вперёд
-          </button>
+          <Pagination
+            currentPage={currentPage}
+            totalPages={totalPages}
+            onPageChange={setCurrentPage}
+          />
         </div>
       )}
 

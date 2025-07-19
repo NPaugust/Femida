@@ -34,7 +34,7 @@ type User = {
   phone?: string;
 };
 
-export default function Header() {
+export default function Header({ onSidebarOpen }: { onSidebarOpen: () => void }) {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
   const [showProfile, setShowProfile] = useState(false);
@@ -144,52 +144,38 @@ export default function Header() {
   };
 
   return (
-    <header className="bg-white shadow-sm border-b border-gray-200 flex items-center justify-between px-8 py-4 h-16">
+    <header className="bg-white shadow-sm border-b border-gray-200 flex items-center justify-between px-4 md:px-8 py-4 h-16">
+      {/* Кнопка-меню для открытия сайдбара */}
+      <button className="mr-4 p-2 text-gray-500 hover:text-blue-600 focus:outline-none rounded-full bg-gray-100 hover:bg-blue-100 transition" aria-label="Меню" onClick={onSidebarOpen}>
+        <svg width="24" height="24" fill="none" viewBox="0 0 24 24"><path d="M4 6h16M4 12h16M4 18h16" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/></svg>
+      </button>
       {/* Логотип и заголовок */}
-      <div className="flex items-center gap-4">
-        <div className="flex items-center gap-3">
-          <div className="w-10 h-10 flex items-center justify-center">
-            <LadyJusticeLogo />
-          </div>
-          <div>
-            <h1 className="text-xl font-bold text-gray-800">Фемида</h1>
-            <p className="text-sm text-gray-500">Админ-панель пансионата</p>
-          </div>
+      <div className="flex items-center gap-3 cursor-pointer select-none" onClick={() => window.location.href = '/dashboard'}>
+        <div className="w-10 h-10 flex items-center justify-center">
+          <LadyJusticeLogo />
+        </div>
+        <div>
+          <h1 className="text-xl font-bold text-gray-800 leading-tight">Фемида</h1>
+          <p className="text-xs text-gray-500 -mt-1">Админ-панель пансионата</p>
         </div>
       </div>
-
-      {/* Правая часть с пользователем */}
-      <div className="flex items-center gap-4">
+      {/* Правая часть */}
+      <div className="flex items-center gap-4 ml-auto">
         {/* Документация */}
-        <button className="p-2 text-gray-400 hover:text-gray-600 transition-colors" onClick={() => setShowDocumentation(true)} title="Документация">
+        <a href="/docs" className="p-2 text-gray-400 hover:text-blue-600 transition-colors rounded-full" title="Документация">
           <FaQuestionCircle size={18} />
-        </button>
-        
+        </a>
         {/* Настройки */}
-        <button className="p-2 text-gray-400 hover:text-gray-600 transition-colors" onClick={() => setShowProfile(true)} title="Профиль">
+        <button className="p-2 text-gray-400 hover:text-gray-600 transition-colors rounded-full" onClick={() => setShowProfile(true)} title="Профиль">
           <FaCog size={18} />
         </button>
-
-        {/* Информация о пользователе */}
+        {/* Информация о пользователе и выход */}
         {user && (
-          <div className="flex items-center gap-3">
-            <div className="text-right">
-              <div className="text-sm font-medium text-gray-900">
-                {user.first_name} {user.last_name}
-              </div>
-              <div className="text-xs text-gray-500">{user.username}</div>
-            </div>
-            
-            <div className="flex items-center gap-2">
-              <span className={`px-2 py-1 rounded-full text-xs font-medium ${getRoleColor(user.role)}`}>
-                {getRoleLabel(user.role)}
-              </span>
-            </div>
-
+          <div className="flex items-center gap-2">
+            <span className={`px-2 py-1 rounded-full text-xs font-medium ${getRoleColor(user.role)}`}>{getRoleLabel(user.role)}</span>
             <div className="w-8 h-8 bg-blue-100 rounded-full flex items-center justify-center">
               <FaUserCircle className="text-blue-600" size={20} />
             </div>
-
             <button
               onClick={handleLogout}
               className="flex items-center gap-2 px-3 py-2 text-sm text-red-600 hover:text-red-700 hover:bg-red-50 rounded-lg transition-colors"

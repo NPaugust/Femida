@@ -26,6 +26,8 @@ interface Booking {
   check_in: string;
   check_out: string;
   status: string;
+  payment_status?: string;
+  total_amount?: number;
   related_order?: string;
   guest?: Guest;
   people_count?: number;
@@ -60,6 +62,12 @@ const BOOKING_STATUSES = [
   { value: 'cancelled', label: 'Отменено' },
 ];
 
+const PAYMENT_STATUSES = [
+  { value: 'pending', label: 'В ожидании' },
+  { value: 'paid', label: 'Оплачено' },
+  { value: 'unpaid', label: 'Не оплачено' },
+];
+
 interface BookingModalProps {
   open: boolean;
   onClose: () => void;
@@ -71,7 +79,7 @@ interface BookingModalProps {
 
 function BookingModal({ open, onClose, onSave, guests, rooms, initial }: BookingModalProps) {
   const [form, setForm] = useState({
-    status: initial?.status || 'active',
+    payment_status: initial?.payment_status || 'pending',
     guest_id: initial?.guest?.id || initial?.guest_id || '',
     room_id: initial?.room?.id || initial?.room_id || '',
     check_in: initial?.check_in ? initial.check_in.slice(0, 10) : '',
@@ -114,7 +122,7 @@ function BookingModal({ open, onClose, onSave, guests, rooms, initial }: Booking
       const checkInDate = initial.check_in ? toZonedTime(new Date(initial.check_in), TIMEZONE) : null;
       const checkOutDate = initial.check_out ? toZonedTime(new Date(initial.check_out), TIMEZONE) : null;
       setForm({
-        status: initial.status || 'active',
+        payment_status: initial.payment_status || 'pending',
         guest_id: initial.guest?.id || initial.guest_id || '',
         room_id: initial.room?.id || initial.room_id || '',
         check_in: checkInDate ? formatTz(checkInDate, 'yyyy-MM-dd', { timeZone: TIMEZONE }) : '',
@@ -127,7 +135,7 @@ function BookingModal({ open, onClose, onSave, guests, rooms, initial }: Booking
     }
     if (open && !initial) {
       setForm({
-        status: 'active',
+        payment_status: 'pending',
         guest_id: '',
         room_id: '',
         check_in: '',
@@ -167,7 +175,7 @@ function BookingModal({ open, onClose, onSave, guests, rooms, initial }: Booking
             'Authorization': `Bearer ${localStorage.getItem('access')}`,
           },
           body: JSON.stringify({
-            status: form.status,
+            payment_status: form.payment_status,
             guest_id: form.guest_id,
             room_id: form.room_id,
             check_in,
@@ -184,7 +192,7 @@ function BookingModal({ open, onClose, onSave, guests, rooms, initial }: Booking
             'Authorization': `Bearer ${localStorage.getItem('access')}`,
           },
           body: JSON.stringify({
-            status: form.status,
+            payment_status: form.payment_status,
             guest_id: form.guest_id,
             room_id: form.room_id,
             check_in,
@@ -220,9 +228,9 @@ function BookingModal({ open, onClose, onSave, guests, rooms, initial }: Booking
         <h2 className="text-xl font-bold mb-6">{initial ? 'Редактировать' : 'Добавить'} бронирование</h2>
         <button onClick={onClose} className="absolute top-4 right-4 text-gray-400 hover:text-gray-700 text-2xl font-bold focus:outline-none">×</button>
         <form className="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-4" onSubmit={handleSubmit}>
-          <label className="font-semibold md:text-right md:pr-2 flex items-center">Статус:</label>
-          <select className="input w-full" value={form.status} onChange={e => setForm(f => ({ ...f, status: e.target.value }))}>
-            {BOOKING_STATUSES.map(opt => <option key={opt.value} value={opt.value}>{opt.label}</option>)}
+          <label className="font-semibold md:text-right md:pr-2 flex items-center">Статус оплаты:</label>
+          <select className="input w-full" value={form.payment_status} onChange={e => setForm(f => ({ ...f, payment_status: e.target.value }))}>
+            {PAYMENT_STATUSES.map(opt => <option key={opt.value} value={opt.value}>{opt.label}</option>)}
           </select>
 
           <label className="font-semibold md:text-right md:pr-2 flex items-center">Гость:</label>
@@ -416,6 +424,15 @@ export default function BookingsPage() {
   const toastTimeout = useRef<NodeJS.Timeout | null>(null);
   const [activeRow, setActiveRow] = useState<number | null>(null);
   const [view, setView] = useState<'list' | 'table' | 'calendar'>('list');
+
+  // Пагинация
+  const [currentPage, setCurrentPage] = useState(1);
+  const bookingsPerPage = 9;
+  const totalPages = Math.ceil(bookings.length / bookingsPerPage);
+  const paginatedBookings = bookings.slice(
+    (currentPage - 1) * bookingsPerPage,
+    currentPage * bookingsPerPage
+  );
 
   useEffect(() => {
     if (typeof window !== 'undefined') {
@@ -612,24 +629,50 @@ export default function BookingsPage() {
                   <th className="p-3 text-left">Выезд</th>
                   <th className="p-3 text-left">Гость</th>
                   <th className="p-3 text-left">Статус</th>
+                  <th className="p-3 text-left">Оплачено</th>
+                  <th className="p-3 text-left">Цена</th>
                   <th className="p-3 text-left">Действия</th>
                 </tr>
               </thead>
               <tbody>
                 {loading ? (
-                  <tr><td colSpan={8} className="text-center text-gray-400 py-8">Загрузка...</td></tr>
+                  <tr><td colSpan={10} className="text-center text-gray-400 py-8">Загрузка...</td></tr>
                 ) : filtered.length === 0 ? (
-                  <tr><td colSpan={8} className="text-center text-gray-400 py-8">Нет бронирований</td></tr>
+                  <tr><td colSpan={10} className="text-center text-gray-400 py-8">Нет бронирований</td></tr>
                 ) : (
                   filtered.map((b, idx) => (
                     <tr key={b.id} className={`transition-all border-b last:border-b-0 ${idx % 2 === 1 ? 'bg-gray-50' : 'bg-white'} hover:bg-blue-50`} onClick={() => setActiveRow(b.id)}>
                       <td className="p-3 font-mono text-xs text-gray-500 min-w-0 truncate">{idx + 1}</td>
-                      <td className="p-3 min-w-0 truncate">{typeof b.room.room_class === 'object' ? b.room.room_class.label : b.room.room_class}</td>
+                      <td className="p-3 min-w-0 truncate">
+                        {typeof b.room.room_class === 'object' && b.room.room_class !== null
+                          ? b.room.room_class.label
+                          : b.room.room_class === 'standard'
+                            ? 'Стандарт'
+                            : b.room.room_class === 'semi_lux'
+                              ? 'Полу-люкс'
+                              : b.room.room_class === 'lux'
+                                ? 'Люкс'
+                                : b.room.room_class}
+                      </td>
                       <td className="p-3 min-w-0 truncate">{b.room.number}</td>
                       <td className="p-3 min-w-0 truncate">{formatDateTime(b.check_in)}</td>
                       <td className="p-3 min-w-0 truncate">{formatDateTime(b.check_out)}</td>
                       <td className="p-3 min-w-0 truncate">{b.guest?.full_name || '—'}</td>
                       <td className="p-3 min-w-0 truncate">{STATUS_LABELS[b.status] || b.status}</td>
+                      <td className="p-3 min-w-0 truncate">
+                        <span className={`px-2 py-1 rounded-full text-xs font-semibold ${
+                          b.payment_status === 'paid' ? 'bg-green-100 text-green-800' :
+                          b.payment_status === 'unpaid' ? 'bg-red-100 text-red-800' :
+                          'bg-yellow-100 text-yellow-800'
+                        }`}>
+                          {b.payment_status === 'paid' ? 'Оплачено' :
+                           b.payment_status === 'unpaid' ? 'Не оплачено' :
+                           'В ожидании'}
+                        </span>
+                      </td>
+                      <td className="p-3 min-w-0 truncate font-mono">
+                        {b.total_amount ? `${Math.round(b.total_amount).toLocaleString()} сом` : '—'}
+                      </td>
                       <td className="p-3 min-w-0 truncate">
                         <div className="flex gap-2">
                           <button onClick={e => { e.stopPropagation(); setEditBooking(b); }} className="bg-blue-100 hover:bg-blue-200 text-blue-700 px-3 py-1 rounded font-semibold flex items-center gap-1 text-xs">Ред.</button>

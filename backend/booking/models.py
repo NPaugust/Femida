@@ -3,6 +3,7 @@ from django.db import models
 from phonenumber_field.modelfields import PhoneNumberField
 from django.db.models.signals import post_save, post_delete
 from django.dispatch import receiver
+from django.utils import timezone
 
 class User(AbstractUser):
     ROLE_CHOICES = [
@@ -11,7 +12,7 @@ class User(AbstractUser):
     ]
     role = models.CharField("Роль", max_length=20, choices=ROLE_CHOICES, default="admin")
     phone = PhoneNumberField("Телефон", blank=True, null=True)
-    last_seen = models.DateTimeField("Последняя активность", auto_now=True)
+    last_seen = models.DateTimeField("Последняя активность", default=timezone.now)
 
     def __str__(self):
         return f"{self.username} ({self.get_role_display()})"
@@ -29,6 +30,7 @@ class User(AbstractUser):
 class Building(models.Model):
     name = models.CharField(max_length=100, verbose_name="Название корпуса")
     address = models.CharField(max_length=255, verbose_name="Адрес")
+    description = models.TextField(blank=True, verbose_name="Описание")
 
     def __str__(self):
         return self.name
@@ -44,8 +46,6 @@ class Room(models.Model):
             ('standard', 'Стандарт'),
             ('semi_lux', 'Полу-люкс'),
             ('lux', 'Люкс')
-
-
         ],
         default='standard',
         verbose_name="Класс комнаты"
@@ -66,9 +66,28 @@ class Room(models.Model):
     def __str__(self):
         return f"{self.building.name} - {self.number}"
 
+    def update_status(self):
+        """Автоматически обновляет статус номера на основе активных бронирований"""
+        if self.status == 'repair':
+            return  # Если номер на ремонте, не меняем статус
+        
+        # Проверяем есть ли активные бронирования для этого номера
+        active_bookings = self.bookings.filter(
+            status='active',
+            is_deleted=False
+        )
+        
+        if active_bookings.exists():
+            self.status = 'busy'
+        else:
+            self.status = 'free'
+        
+        self.save(update_fields=['status'])
+
     def soft_delete(self):
         self.is_deleted = True
         self.save()
+    
     def restore(self):
         self.is_deleted = False
         self.save()
@@ -103,6 +122,7 @@ class Guest(models.Model):
     def soft_delete(self):
         self.is_deleted = True
         self.save()
+    
     def restore(self):
         self.is_deleted = False
         self.save()
@@ -122,10 +142,9 @@ class Booking(models.Model):
     payment_status = models.CharField(
         max_length=20,
         choices=[
-            ('pending', 'Ожидает оплаты'),
+            ('pending', 'В ожидании'),
             ('paid', 'Оплачено'),
-            ('partial', 'Частично оплачено'),
-            ('cancelled', 'Отменено'),
+            ('unpaid', 'Не оплачено'),
         ],
         default='pending',
         verbose_name="Статус оплаты"
@@ -158,7 +177,12 @@ class Booking(models.Model):
             from datetime import timedelta
             days = (self.check_out - self.check_in).days
             self.total_amount = self.room.price_per_night * days
+        
+        # Сохраняем бронирование
         super().save(*args, **kwargs)
+        
+        # Обновляем статус номера
+        self.room.update_status()
 
     @property
     def date_from(self):
@@ -173,20 +197,34 @@ class Booking(models.Model):
     def soft_delete(self):
         self.is_deleted = True
         self.save()
+    
     def restore(self):
         self.is_deleted = False
         self.save()
 
 class AuditLog(models.Model):
     user = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, verbose_name="Пользователь")
-    action = models.CharField(max_length=100, verbose_name="Действие")
-    object_type = models.CharField(max_length=100, verbose_name="Тип объекта")
-    object_id = models.PositiveIntegerField(verbose_name="ID объекта")
+    action = models.CharField(max_length=50, verbose_name="Действие")
+    object_type = models.CharField(max_length=50, verbose_name="Тип объекта")
+    object_id = models.IntegerField(verbose_name="ID объекта")
+    details = models.TextField(verbose_name="Детали")
     timestamp = models.DateTimeField(auto_now_add=True, verbose_name="Время")
-    details = models.TextField(blank=True, verbose_name="Детали")
 
-    def __str__(self):
-        return f"{self.user} {self.action} {self.object_type} {self.object_id} {self.timestamp}"
+    class Meta:
+        ordering = ['-timestamp']
+
+# Сигналы для автоматического обновления статусов номеров
+@receiver(post_save, sender=Booking)
+def update_room_status_on_booking_save(sender, instance, created, **kwargs):
+    """Обновляет статус номера при сохранении бронирования"""
+    if not instance.is_deleted:
+        instance.room.update_status()
+
+@receiver(post_delete, sender=Booking)
+def update_room_status_on_booking_delete(sender, instance, **kwargs):
+    """Обновляет статус номера при удалении бронирования"""
+    if not instance.is_deleted:
+        instance.room.update_status()
 
 @receiver(post_save, sender=Booking)
 def log_booking_save(sender, instance, created, **kwargs):
@@ -228,25 +266,4 @@ def log_room_delete(sender, instance, **kwargs):
         object_type='Room',
         object_id=instance.id,
         details=f'Удалена комната: {instance.building} {instance.number}, вместимость: {instance.capacity}, тип: {instance.room_type}, статус: {instance.status}'
-    )
-
-@receiver(post_save, sender=Guest)
-def log_guest_save(sender, instance, created, **kwargs):
-    action = 'Создание' if created else 'Изменение'
-    AuditLog.objects.create(
-        user=None,
-        action=action,
-        object_type='Guest',
-        object_id=instance.id,
-        details=f'Гость: {instance.full_name}, телефон: {instance.phone}, людей: {instance.people_count}'
-    )
-
-@receiver(post_delete, sender=Guest)
-def log_guest_delete(sender, instance, **kwargs):
-    AuditLog.objects.create(
-        user=None,
-        action='Удаление',
-        object_type='Guest',
-        object_id=instance.id,
-        details=f'Удалён гость: {instance.full_name}, телефон: {instance.phone}, людей: {instance.people_count}'
     )
