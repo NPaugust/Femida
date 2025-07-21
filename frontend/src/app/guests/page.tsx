@@ -14,6 +14,8 @@ import { API_URL } from '../../shared/api';
 import { useSearchParams } from 'next/navigation';
 import ConfirmModal from '../../components/ConfirmModal';
 import Pagination from '../../components/Pagination';
+import { useSelector, useDispatch } from 'react-redux';
+import { RootState, AppDispatch, setGuests, addGuest, updateGuest, removeGuest, setGuestsLoading, setGuestsError } from '../store';
 
 interface Guest {
   id: number;
@@ -54,6 +56,7 @@ function GuestModal({ open, onClose, onSave, initial }: GuestModalProps) {
   });
   const [loading, setLoading] = useState(false);
   const [errors, setErrors] = useState<{[key: string]: string}>({});
+  const access = useSelector((state: RootState) => state.auth.access);
 
   useEffect(() => {
     if (initial) {
@@ -116,14 +119,13 @@ function GuestModal({ open, onClose, onSave, initial }: GuestModalProps) {
 
     setLoading(true);
     try {
-      const token = localStorage.getItem('access');
       const url = initial ? `${API_URL}/api/guests/${initial.id}/` : `${API_URL}/api/guests/`;
       const method = initial ? 'PUT' : 'POST';
       const response = await fetch(url, {
         method,
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`,
+          'Authorization': `Bearer ${access}`,
         },
         body: JSON.stringify(form),
       });
@@ -214,9 +216,11 @@ function GuestModal({ open, onClose, onSave, initial }: GuestModalProps) {
 export default function GuestsPage() {
   const { t } = useTranslation();
   const searchParams = useSearchParams();
-  const [guests, setGuests] = useState<Guest[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState('');
+  const dispatch = useDispatch<AppDispatch>();
+  const guests = useSelector((state: RootState) => state.guests.guests);
+  const loading = useSelector((state: RootState) => state.guests.loading);
+  const error = useSelector((state: RootState) => state.guests.error);
+  const access = useSelector((state: RootState) => state.auth.access);
   const [showModal, setShowModal] = useState(false);
   const [editingGuest, setEditingGuest] = useState<Guest | null>(null);
   const [showFilters, setShowFilters] = useState(false);
@@ -258,39 +262,34 @@ export default function GuestsPage() {
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, [showFilters]);
 
+  // Загрузка гостей через Redux
   const fetchGuests = async () => {
+    dispatch(setGuestsLoading(true));
     try {
-      const token = localStorage.getItem('access');
-      if (!token) {
+      if (!access) {
         window.location.href = '/login';
         return;
       }
-
       const response = await fetch(`${API_URL}/api/guests/`, {
-        headers: {
-          'Authorization': `Bearer ${token}`,
-        },
+        headers: { 'Authorization': `Bearer ${access}` },
       });
-
       if (response.ok) {
         const data = await response.json();
-        setGuests(data);
+        dispatch(setGuests(data));
       } else {
-        setError('Ошибка загрузки гостей');
+        dispatch(setGuestsError('Ошибка загрузки гостей'));
       }
     } catch (error) {
-      setError('Ошибка сети');
-    } finally {
-      setLoading(false);
+      dispatch(setGuestsError('Ошибка сети'));
     }
+    dispatch(setGuestsLoading(false));
   };
 
   const fetchBookings = async () => {
     try {
-      const token = localStorage.getItem('access');
-      if (!token) return;
+      if (!access) return;
       const response = await fetch(`${API_URL}/api/bookings/`, {
-        headers: { 'Authorization': `Bearer ${token}` },
+        headers: { 'Authorization': `Bearer ${access}` },
       });
       if (response.ok) {
         const data = await response.json();
@@ -299,15 +298,16 @@ export default function GuestsPage() {
     } catch {}
   };
 
+  // Добавление/редактирование гостя через Redux
   const handleSave = (guest: Guest) => {
     if (editingGuest) {
-      setGuests(prev => prev.map(g => g.id === guest.id ? guest : g));
+      dispatch(updateGuest(guest));
     } else {
-      setGuests(prev => [...prev, guest]);
+      dispatch(addGuest(guest));
     }
     setShowModal(false);
     setEditingGuest(null);
-    setCurrentPage(1); // Сброс на первую страницу при добавлении/редактировании
+    setCurrentPage(1);
   };
 
   const handleEdit = (guest: Guest) => {
@@ -320,26 +320,20 @@ export default function GuestsPage() {
     setShowConfirmDelete(true);
   };
 
+  // Удаление гостя через Redux
   const confirmDelete = async () => {
     if (!deleteTarget) return;
-
     try {
-      const token = localStorage.getItem('access');
+      if (!access) return;
       const ids = Array.isArray(deleteTarget) ? deleteTarget : [deleteTarget];
-      
-      await Promise.all(ids.map(id => 
-        fetch(`${API_URL}/api/guests/${id}/`, {
-          method: 'DELETE',
-          headers: {
-            'Authorization': `Bearer ${token}`,
-          },
-        })
-      ));
-
-      setGuests(prev => prev.filter(g => !ids.includes(g.id)));
+      await Promise.all(ids.map(id => fetch(`${API_URL}/api/guests/${id}/`, {
+        method: 'DELETE',
+        headers: { 'Authorization': `Bearer ${access}` },
+      })));
+      ids.forEach(id => dispatch(removeGuest(id)));
       setSelectedGuestIds([]);
     } catch (error) {
-      setError('Ошибка при удалении');
+      dispatch(setGuestsError('Ошибка при удалении'));
     } finally {
       setDeleteTarget(null);
       setShowConfirmDelete(false);

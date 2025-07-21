@@ -1,6 +1,10 @@
+'use client';
+
 import React, { useRef, useEffect, useState } from "react";
 import Link from "next/link";
 import { FaChevronLeft, FaChevronRight, FaHome, FaCalendarCheck, FaUser, FaBed, FaChartBar, FaTrash, FaUsers, FaBuilding } from "react-icons/fa";
+import { useSelector } from 'react-redux';
+import { RootState } from '../app/store';
 
 const MENU = [
   { href: "/dashboard", label: "Главная", icon: <FaHome /> },
@@ -15,25 +19,8 @@ const MENU = [
 
 export default function SidebarDrawer({ open, setOpen }: { open: boolean, setOpen: (open: boolean) => void }) {
   const [showArrow, setShowArrow] = React.useState(true);
-  const [userRole, setUserRole] = useState<string>('admin');
+  const userRole = useSelector((state: RootState) => state.auth.role) || 'admin';
   const sidebarRef = useRef<HTMLDivElement>(null);
-
-  // Получаем роль пользователя из localStorage
-  useEffect(() => {
-    const user = localStorage.getItem('user');
-    const role = localStorage.getItem('role');
-    
-    if (user) {
-      try {
-        const parsed = JSON.parse(user);
-        setUserRole(parsed.role || role || 'admin');
-      } catch {
-        setUserRole(role || 'admin');
-      }
-    } else if (role) {
-      setUserRole(role);
-    }
-  }, []);
 
   // Закрытие при клике вне Sidebar
   useEffect(() => {

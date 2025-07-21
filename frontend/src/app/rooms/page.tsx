@@ -12,12 +12,14 @@ import { API_URL } from '../../shared/api';
 import { useSearchParams } from 'next/navigation';
 import ConfirmModal from '../../components/ConfirmModal';
 import Pagination from '../../components/Pagination';
+import { useSelector, useDispatch } from 'react-redux';
+import { RootState, AppDispatch, setRooms, addRoom, updateRoom, removeRoom, setRoomsLoading, setRoomsError } from '../store';
 
 interface Room {
   id: number;
   number: string;
   room_class: string | { value: string; label: string };
-  description: string;
+  description: string; // всегда string
   building: { id: number; name: string };
   capacity: number;
   status: string;
@@ -94,6 +96,7 @@ function RoomModal({ open, onClose, onSave, initial, buildings }: RoomModalProps
   });
   const [loading, setLoading] = useState(false);
   const [errors, setErrors] = useState<{[key: string]: string}>({});
+  const access = useSelector((state: RootState) => state.auth.access);
 
   useEffect(() => {
     if (initial) {
@@ -180,7 +183,6 @@ function RoomModal({ open, onClose, onSave, initial, buildings }: RoomModalProps
     }
     setLoading(true);
     try {
-      const token = localStorage.getItem('access');
       const url = initial ? `${API_URL}/api/rooms/${initial.id}/` : `${API_URL}/api/rooms/`;
       const method = initial ? 'PUT' : 'POST';
       const payload: any = {
@@ -200,7 +202,7 @@ function RoomModal({ open, onClose, onSave, initial, buildings }: RoomModalProps
         method,
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`,
+          'Authorization': `Bearer ${access}`,
         },
         body: JSON.stringify(payload),
       });
@@ -295,10 +297,12 @@ function RoomModal({ open, onClose, onSave, initial, buildings }: RoomModalProps
 export default function RoomsPage() {
   const { t } = useTranslation();
   const searchParams = useSearchParams();
-  const [rooms, setRooms] = useState<Room[]>([]);
+  const dispatch = useDispatch<AppDispatch>();
+  const rooms = useSelector((state: RootState) => state.rooms.rooms);
+  const loading = useSelector((state: RootState) => state.rooms.loading);
+  const error = useSelector((state: RootState) => state.rooms.error);
+  const access = useSelector((state: RootState) => state.auth.access);
   const [buildings, setBuildings] = useState<Building[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState('');
   const [showModal, setShowModal] = useState(false);
   const [editingRoom, setEditingRoom] = useState<Room | null>(null);
   const [showFilters, setShowFilters] = useState(false);
@@ -338,19 +342,19 @@ export default function RoomsPage() {
   }, [showFilters]);
 
   const fetchData = async () => {
+    dispatch(setRoomsLoading(true));
     try {
-      const token = localStorage.getItem('access');
-      if (!token) {
+      if (!access) {
         window.location.href = '/login';
         return;
       }
 
       const [roomsResponse, buildingsResponse] = await Promise.all([
         fetch(`${API_URL}/api/rooms/`, {
-          headers: { 'Authorization': `Bearer ${token}` },
+          headers: { 'Authorization': `Bearer ${access}` },
         }),
         fetch(`${API_URL}/api/buildings/`, {
-          headers: { 'Authorization': `Bearer ${token}` },
+          headers: { 'Authorization': `Bearer ${access}` },
         }),
       ]);
 
@@ -359,23 +363,25 @@ export default function RoomsPage() {
           roomsResponse.json(),
           buildingsResponse.json(),
         ]);
-        setRooms(roomsData);
+        dispatch(setRooms(roomsData));
         setBuildings(buildingsData);
       } else {
-        setError('Ошибка загрузки данных');
+        dispatch(setRoomsError('Ошибка загрузки данных'));
       }
     } catch (error) {
-      setError('Ошибка сети');
+      dispatch(setRoomsError('Ошибка сети'));
     } finally {
-      setLoading(false);
+      dispatch(setRoomsLoading(false));
     }
   };
 
   const handleSave = (room: Room) => {
+    // Приводим room.description к string
+    const safeRoom = { ...room, description: room.description ?? '' };
     if (editingRoom) {
-      setRooms(prev => prev.map(r => r.id === room.id ? room : r));
+      dispatch(updateRoom(safeRoom));
     } else {
-      setRooms(prev => [...prev, room]);
+      dispatch(addRoom(safeRoom));
     }
     setEditingRoom(null);
   };
@@ -393,26 +399,27 @@ export default function RoomsPage() {
   const confirmDelete = async () => {
     if (!deleteTarget) return;
 
+    dispatch(setRoomsLoading(true));
     try {
-      const token = localStorage.getItem('access');
       const ids = Array.isArray(deleteTarget) ? deleteTarget : [deleteTarget];
       
       await Promise.all(ids.map(id => 
         fetch(`${API_URL}/api/rooms/${id}/`, {
           method: 'DELETE',
           headers: {
-            'Authorization': `Bearer ${token}`,
+            'Authorization': `Bearer ${access}`,
           },
         })
       ));
 
-      setRooms(prev => prev.filter(r => !ids.includes(r.id)));
+      ids.forEach(id => dispatch(removeRoom(id)));
       setSelectedRoomIds([]);
     } catch (error) {
-      setError('Ошибка при удалении');
+      dispatch(setRoomsError('Ошибка при удалении'));
     } finally {
       setDeleteTarget(null);
       setShowConfirmDelete(false);
+      dispatch(setRoomsLoading(false));
     }
   };
 
@@ -470,10 +477,17 @@ export default function RoomsPage() {
     }, 1000);
   };
 
-  const filteredRooms = rooms.filter(room => {
+  // rooms из Redux могут содержать description: string | undefined, поэтому приводим к string
+  const safeRooms: Room[] = rooms.map((r: any) => ({
+    ...r,
+    description: r.description ?? '',
+    room_type: r.room_type ?? '',
+  }));
+
+  const filteredRooms: Room[] = safeRooms.filter((room: Room) => {
     const matchesSearch = !filters.search || 
       room.number.toLowerCase().includes(filters.search.toLowerCase()) ||
-      room.description.toLowerCase().includes(filters.search.toLowerCase());
+      (room.description || '').toLowerCase().includes(filters.search.toLowerCase());
     
     const matchesClass = !filters.roomClass || 
       (typeof room.room_class === 'object' ? room.room_class.value === filters.roomClass : room.room_class === filters.roomClass);
@@ -496,18 +510,18 @@ export default function RoomsPage() {
 
   // Пагинация
   const totalPages = Math.ceil(filteredRooms.length / roomsPerPage);
-  const paginatedRooms = filteredRooms.slice(
+  const paginatedRooms: Room[] = filteredRooms.slice(
     (currentPage - 1) * roomsPerPage,
     currentPage * roomsPerPage
   );
 
-  const getRoomStatistics = () => {
-    const total = rooms.length;
-    const active = rooms.filter(r => r.is_active).length;
-    const totalCapacity = rooms.reduce((sum, r) => sum + r.capacity, 0);
+  function getRoomStatistics(roomsArr: Room[] = safeRooms) {
+    const total = roomsArr.length;
+    const active = roomsArr.filter(r => r.is_active).length;
+    const totalCapacity = roomsArr.reduce((sum, r) => sum + r.capacity, 0);
     
     // Рассчитываем общую стоимость всех номеров
-    const totalValue = rooms.reduce((sum, r) => {
+    const totalValue = roomsArr.reduce((sum, r) => {
       let price = r.price_per_night;
       
       // Если это строка, убираем пробелы и конвертируем
@@ -520,7 +534,7 @@ export default function RoomsPage() {
     }, 0);
     
     return { total, active, totalCapacity, totalValue };
-  };
+  }
 
   if (loading) {
     return (
@@ -547,7 +561,7 @@ export default function RoomsPage() {
     );
   }
 
-  const stats = getRoomStatistics();
+  const stats = getRoomStatistics(safeRooms);
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -625,11 +639,12 @@ export default function RoomsPage() {
           <div className="bg-gradient-to-br from-purple-50 to-purple-100 rounded-2xl shadow-lg p-6 border border-purple-200 hover:shadow-xl transition-all duration-300 group">
             <div className="flex items-center gap-4">
               <div className="w-12 h-12 bg-purple-500 rounded-xl flex items-center justify-center shadow-lg group-hover:scale-110 transition-transform">
-                <FaUsers className="text-white text-xl" />
+                <FaBuilding className="text-white text-xl" />
               </div>
               <div>
-                <p className="text-sm text-purple-700 font-bold">Общая вместимость</p>
-                <p className="text-3xl font-bold text-purple-900">{stats.totalCapacity}</p>
+                <p className="text-sm text-purple-700 font-bold">Всего зданий</p>
+                <p className="text-3xl font-bold text-purple-900">{buildings.length}</p>
+                <p className="text-xs text-purple-700 mt-1">{buildings.map(b => b.name).join(', ')}</p>
               </div>
             </div>
           </div>
@@ -810,7 +825,7 @@ export default function RoomsPage() {
                     </td>
                     <td className='p-3 text-center'>
                       {(() => {
-                        if (room.room_class_display && room.room_class_display.label) {
+                        if ('room_class_display' in room && room.room_class_display && typeof room.room_class_display === 'object' && 'label' in room.room_class_display) {
                           return (
                             <span className='inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-800'>
                               {room.room_class_display.label}

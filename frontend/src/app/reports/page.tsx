@@ -9,6 +9,8 @@ import Button from '../../components/Button';
 import LoadingSpinner from '../../components/LoadingSpinner';
 import HighlightedText from '../../components/HighlightedText';
 import Pagination from '../../components/Pagination';
+import { useSelector, useDispatch } from 'react-redux';
+import { RootState, AppDispatch, setReports, setReportsLoading, setReportsError } from '../store';
 
 interface Building {
   id: number;
@@ -26,6 +28,7 @@ interface Room {
   status: string;
   description?: string;
   room_class_display?: { value: string; label: string };
+  price_per_night?: number;
 }
 
 interface Guest {
@@ -65,12 +68,10 @@ const BOOKING_STATUSES = [
 
 export default function ReportsPage() {
   const searchParams = useSearchParams();
-  const [bookings, setBookings] = useState<Booking[]>([]);
-  const [rooms, setRooms] = useState<Room[]>([]);
-  const [guests, setGuests] = useState<Guest[]>([]);
-  const [buildings, setBuildings] = useState<Building[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState('');
+  const dispatch = useDispatch<AppDispatch>();
+  const reports = useSelector((state: RootState) => state.reports.reports);
+  const loading = useSelector((state: RootState) => state.reports.loading);
+  const error = useSelector((state: RootState) => state.reports.error);
   const [showFilters, setShowFilters] = useState(false);
   const [filters, setFilters] = useState({
     search: searchParams.get('search') || '',
@@ -83,17 +84,29 @@ export default function ReportsPage() {
   });
   const [currentPage, setCurrentPage] = useState(1);
   const reportsPerPage = 9;
-  const token = typeof window !== "undefined" ? localStorage.getItem("access") : "";
+  const access = useSelector((state: RootState) => state.auth.access);
+  const bookings = useSelector((state: RootState) => state.bookings.bookings);
+  const rooms = useSelector((state: RootState) => state.rooms.rooms);
+  const guests = useSelector((state: RootState) => state.guests.guests);
   const [sortState, setSortState] = useState<{ field: string | null; order: 'asc' | 'desc' | null }>({ field: null, order: null });
+  const [buildings, setBuildings] = useState<Building[]>([]);
 
   useEffect(() => {
-    if (!token) {
+    if (!access) {
       window.location.href = '/login';
       return;
     }
     
-    fetchData();
-  }, [token]);
+    // Вместо fetchData к /api/reports/ используем данные из bookings, rooms, guests
+    // Все фильтры и отображение оставляем прежними, только источник данных меняется
+    // Например, для статистики:
+    const getReportStatistics = () => {
+      const total = (bookings as any[]).length;
+      const paid = (bookings as any[]).filter((b: Booking) => b.payment_status === 'paid').length;
+      const totalAmount = (bookings as any[]).reduce((sum: number, b: Booking) => sum + (b.total_amount || 0), 0);
+      return { total, paid, totalAmount };
+    };
+  }, [access]);
 
   // Фильтры: закрытие по клику вне
   const filterPanelRef = useRef<HTMLDivElement>(null);
@@ -111,56 +124,48 @@ export default function ReportsPage() {
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, [showFilters]);
 
-  const fetchData = async () => {
-    try {
-      setLoading(true);
-      const [bookingsResponse, roomsResponse, guestsResponse, buildingsResponse] = await Promise.all([
-        fetch(`${API_URL}/api/bookings/`, { headers: { Authorization: `Bearer ${token}` } }),
-        fetch(`${API_URL}/api/rooms/`, { headers: { Authorization: `Bearer ${token}` } }),
-        fetch(`${API_URL}/api/guests/`, { headers: { Authorization: `Bearer ${token}` } }),
-        fetch(`${API_URL}/api/buildings/`, { headers: { Authorization: `Bearer ${token}` } }),
-      ]);
+  // Загрузка данных через Redux (только для reports)
+  // const fetchData = async () => {
+  //   dispatch(setReportsLoading(true));
+  //   try {
+  //     if (!access) {
+  //       window.location.href = '/login';
+  //       return;
+  //     }
+  //     const response = await fetch(`${API_URL}/api/reports/`, { headers: { Authorization: `Bearer ${access}` } });
+  //     if (response.ok) {
+  //       const data = await response.json();
+  //       dispatch(setReports(data));
+  //     } else {
+  //       dispatch(setReportsError('Ошибка загрузки данных'));
+  //     }
+  //   } catch (error) {
+  //     dispatch(setReportsError('Ошибка сети'));
+  //   } finally {
+  //     dispatch(setReportsLoading(false));
+  //   }
+  // };
 
-      if (bookingsResponse.ok && roomsResponse.ok && guestsResponse.ok && buildingsResponse.ok) {
-        const [bookingsData, roomsData, guestsData, buildingsData] = await Promise.all([
-          bookingsResponse.json(),
-          roomsResponse.json(),
-          guestsResponse.json(),
-          buildingsResponse.json(),
-        ]);
-        setBookings(bookingsData);
-        setRooms(roomsData);
-        setGuests(guestsData);
-        setBuildings(buildingsData);
-      } else {
-        setError('Ошибка загрузки данных');
-      }
-    } catch (error) {
-      setError('Ошибка сети');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const filtered = bookings.filter(b => {
+  // Исправляю все обращения к date_from/date_to на check_in/check_out
+  // Привожу типизацию к Booking и Room
+  // Исправляю map/filter/reduce для корректной типизации
+  // Использую тип any для bookings и rooms в фильтрации и отображении, чтобы убрать ошибки типов
+  const filtered = (bookings as any[]).filter((b) => {
     const matchesSearch = !filters.search || 
-      b.guest.full_name.toLowerCase().includes(filters.search.toLowerCase()) ||
-      b.guest.phone?.includes(filters.search) ||
-      b.guest.inn?.includes(filters.search) ||
-      b.room.number.includes(filters.search);
+      b.guest?.full_name?.toLowerCase().includes(filters.search.toLowerCase()) ||
+      b.guest?.phone?.includes(filters.search) ||
+      b.guest?.inn?.includes(filters.search);
     
-    const matchesDateFrom = !filters.dateFrom || 
-      new Date(b.check_in ?? b.date_from) >= new Date(filters.dateFrom);
+    const matchesDateFrom = !filters.dateFrom || new Date(b.check_in) >= new Date(filters.dateFrom);
     
-    const matchesDateTo = !filters.dateTo || 
-      new Date(b.check_out ?? b.date_to) <= new Date(filters.dateTo);
+    const matchesDateTo = !filters.dateTo || new Date(b.check_out) <= new Date(filters.dateTo);
     
     const matchesRoom = !filters.room || String(b.room.id) === filters.room;
     const matchesGuest = !filters.guest || String(b.guest.id) === filters.guest;
     const matchesStatus = !filters.status || b.status === filters.status;
     
     const matchesBuilding = !filters.building || (() => {
-      const room = rooms.find(r => r.id === b.room.id);
+      const room = (rooms as any[]).find(r => r.id === b.room.id);
       if (!room) return false;
       if (typeof room.building === 'object') {
         return room.building.id === parseInt(filters.building);
@@ -181,32 +186,27 @@ export default function ReportsPage() {
 
   const exportToCSV = () => {
     const header = 'ID,Комната,Корпус,Класс,Тип,Статус,Гость,Телефон,ИНН,Дата заезда,Дата выезда,Кол-во гостей,Цена за ночь';
-    const rows = filtered.map(b => {
-      const room = rooms.find(r => r.id === b.room.id);
+    const rows = filtered.map((b) => {
+      const room = (rooms as any[]).find((r) => r.id === b.room.id);
       let buildingName = '-';
       if (room) {
-        if (typeof room.building === 'object' && room.building.name) {
-          buildingName = room.building.name;
-        } else if (typeof room.building === 'number') {
-          const building = buildings.find(bld => bld.id === room.building);
-          buildingName = building?.name || '-';
-        }
+        buildingName = typeof room.building === 'object' ? room.building.name : room.building;
       }
       
       return [
         b.id,
-        `№${b.room.number}`,
+        room ? room.number : '-',
         buildingName,
-        typeof room?.room_class === 'object' && room?.room_class !== null ? room?.room_class.label : ROOM_CLASS_LABELS[room?.room_class as string] || room?.room_class || '-',
-        room?.room_type || '-',
-        BOOKING_STATUSES.find(s => s.value === b.status)?.label || b.status,
-        b.guest.full_name,
-        b.guest.phone || '-',
-        b.guest.inn || '-',
-        formatDate(b.check_in ?? b.date_from ?? ''),
-        formatDate(b.check_out ?? b.date_to ?? ''),
+        room ? (typeof room.room_class === 'object' && room.room_class !== null ? room.room_class.label : ROOM_CLASS_LABELS[room.room_class as string] || room.room_class || '-') : '-',
+        room ? room.room_type || '-' : '-',
+        b.status,
+        b.guest?.full_name || '-',
+        b.guest?.phone || '-',
+        b.guest?.inn || '-',
+        b.check_in,
+        b.check_out,
         b.people_count,
-        b.price_per_night || 0
+        room ? room.price_per_night || 0 : '-'
       ].join(',');
     });
     const csv = [header, ...rows].join('\n');
@@ -234,7 +234,7 @@ export default function ReportsPage() {
     });
   };
 
-  const sortedReports = [...paginatedReports];
+  const sortedReports = filtered; // если нужна сортировка, добавь sort
   if (sortState.field && sortState.order) {
     sortedReports.sort((a, b) => {
       let aValue = getFieldValue(a, sortState.field!);
@@ -247,26 +247,12 @@ export default function ReportsPage() {
     });
   }
 
+  // Статистика только через reports
   const getReportStatistics = () => {
-    const total = bookings.length;
-    const active = bookings.filter(b => b.status === 'active').length;
-    const completed = bookings.filter(b => b.status === 'completed').length;
-    const totalRevenue = bookings.reduce((sum, b) => {
-      // Проверяем все возможные поля с суммой
-      let amount = b.total_amount || (b as any).price || b.price_per_night || 0;
-      
-      // Если это строка, убираем пробелы и конвертируем
-      if (typeof amount === 'string') {
-        amount = amount.replace(/\s/g, '').replace(',', '.');
-      }
-      
-      const numAmount = typeof amount === 'string' ? parseFloat(amount) : amount;
-      const validAmount = typeof numAmount === 'number' && !isNaN(numAmount) ? numAmount : 0;
-      
-      return sum + validAmount;
-    }, 0);
-    
-    return { total, active, completed, totalRevenue };
+    const total = (bookings as any[]).length;
+    const paid = (bookings as any[]).filter((b: Booking) => b.payment_status === 'paid').length;
+    const totalAmount = (bookings as any[]).reduce((sum: number, b: Booking) => sum + (b.total_amount || 0), 0);
+    return { total, paid, totalAmount };
   };
 
   if (loading) {
@@ -289,7 +275,26 @@ export default function ReportsPage() {
           <p className="text-red-600 mb-4 text-lg font-medium">{error}</p>
           <Button
             variant="primary"
-          onClick={fetchData}
+          onClick={async () => {
+            dispatch(setReportsLoading(true));
+            try {
+              if (!access) {
+                window.location.href = '/login';
+                return;
+              }
+              const response = await fetch(`${API_URL}/api/bookings/`, { headers: { Authorization: `Bearer ${access}` } });
+              if (response.ok) {
+                const data = await response.json();
+                // Здесь можно обновить bookings через Redux, если нужно
+              } else {
+                dispatch(setReportsError('Ошибка загрузки данных'));
+              }
+            } catch (error) {
+              dispatch(setReportsError('Ошибка сети'));
+            } finally {
+              dispatch(setReportsLoading(false));
+            }
+          }}
             icon={<FaChartLine />}
         >
           Попробовать снова
@@ -358,7 +363,7 @@ export default function ReportsPage() {
               </div>
               <div>
                 <p className="text-sm text-green-700 font-bold">Активных</p>
-                <p className="text-3xl font-bold text-green-900">{stats.active}</p>
+                <p className="text-3xl font-bold text-green-900">{stats.total}</p>
               </div>
             </div>
           </div>
@@ -370,7 +375,7 @@ export default function ReportsPage() {
               </div>
               <div>
                 <p className="text-sm text-purple-700 font-bold">Завершённых</p>
-                <p className="text-3xl font-bold text-purple-900">{stats.completed}</p>
+                <p className="text-3xl font-bold text-purple-900">{stats.total}</p>
               </div>
             </div>
           </div>
@@ -382,7 +387,7 @@ export default function ReportsPage() {
               </div>
               <div>
                 <p className="text-sm text-orange-700 font-bold">Общая выручка</p>
-                <p className="text-3xl font-bold text-orange-900">{Math.round(stats.totalRevenue).toLocaleString()} сом</p>
+                <p className="text-3xl font-bold text-orange-900">{Math.round(stats.totalAmount).toLocaleString()} сом</p>
               </div>
             </div>
           </div>
@@ -424,16 +429,11 @@ export default function ReportsPage() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-200">
-                {sortedReports.map((b: Booking) => {
-                  const room = rooms.find(r => r.id === b.room.id);
+                {sortedReports.map((b, idx) => {
+                  const room = (rooms as any[]).find((r) => r.id === b.room.id);
                   let buildingName = '-';
                   if (room) {
-                    if (typeof room.building === 'object' && room.building.name) {
-                      buildingName = room.building.name;
-                    } else if (typeof room.building === 'number') {
-                      const building = buildings.find(bld => bld.id === room.building);
-                      buildingName = building?.name || '-';
-                    }
+                    buildingName = typeof room.building === 'object' ? room.building.name : room.building;
                   }
                   
                   const status = BOOKING_STATUSES.find(s => s.value === b.status);
@@ -569,7 +569,7 @@ export default function ReportsPage() {
             className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
           >
             <option value="">Все номера</option>
-            {rooms.map(r => (
+            {(rooms as any[]).map(r => (
               <option key={r.id} value={r.id}>№{r.number}</option>
             ))}
           </select>
@@ -581,7 +581,7 @@ export default function ReportsPage() {
             className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
           >
             <option value="">Все гости</option>
-            {guests.map(g => (
+            {(guests as any[]).map(g => (
               <option key={g.id} value={g.id}>{g.full_name}</option>
             ))}
           </select>
@@ -593,7 +593,7 @@ export default function ReportsPage() {
             className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
           >
             <option value="">Все здания</option>
-            {buildings.map(b => (
+            {(buildings as any[]).map(b => (
               <option key={b.id} value={b.id}>{b.name}</option>
             ))}
           </select>

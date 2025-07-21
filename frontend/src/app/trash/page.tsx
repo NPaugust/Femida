@@ -6,6 +6,8 @@ import { API_URL } from "../../shared/api";
 import ConfirmModal from "../../components/ConfirmModal";
 import HighlightedText from "../../components/HighlightedText";
 import Pagination from '../../components/Pagination';
+import { useSelector } from 'react-redux';
+import { RootState } from '../store';
 
 interface TrashItem {
   id: number;
@@ -33,6 +35,8 @@ export default function TrashPage() {
   const [showConfirmDelete, setShowConfirmDelete] = useState(false);
   const [actionTarget, setActionTarget] = useState<number | number[] | null>(null);
   const [actionType, setActionType] = useState<'restore' | 'delete' | null>(null);
+
+  const access = useSelector((state: RootState) => state.auth.access);
 
   // СНАЧАЛА фильтрация
   const filteredItems = trashItems.filter(item => {
@@ -79,8 +83,7 @@ export default function TrashPage() {
 
   const fetchTrashData = async () => {
     try {
-      const token = localStorage.getItem('access');
-      if (!token) {
+      if (!access) {
         window.location.href = '/login';
         return;
       }
@@ -89,7 +92,7 @@ export default function TrashPage() {
       let allTrash: TrashItem[] = [];
       for (const type of types) {
         const res = await fetch(`${API_URL}/api/trash/${type}/`, {
-          headers: { 'Authorization': `Bearer ${token}` },
+          headers: { 'Authorization': `Bearer ${access}` },
         });
         if (!res.ok) throw new Error('Ошибка загрузки корзины');
         const data = await res.json();
@@ -125,14 +128,17 @@ export default function TrashPage() {
   const confirmRestore = async () => {
     if (!actionTarget) return;
     try {
-      const token = localStorage.getItem('access');
+      if (!access) {
+        window.location.href = '/login';
+        return;
+      }
       const ids = Array.isArray(actionTarget) ? actionTarget : [actionTarget];
       for (const id of ids) {
         const item = trashItems.find(i => i.id === id);
         if (!item) continue;
         const res = await fetch(`${API_URL}/api/trash/restore/${item.type}s/${id}/`, {
           method: 'POST',
-          headers: { 'Authorization': `Bearer ${token}` },
+          headers: { 'Authorization': `Bearer ${access}` },
         });
         if (!res.ok) throw new Error('Ошибка восстановления');
       }
@@ -151,14 +157,17 @@ export default function TrashPage() {
   const confirmDelete = async () => {
     if (!actionTarget) return;
     try {
-      const token = localStorage.getItem('access');
+      if (!access) {
+        window.location.href = '/login';
+        return;
+      }
       const ids = Array.isArray(actionTarget) ? actionTarget : [actionTarget];
       for (const id of ids) {
         const item = trashItems.find(i => i.id === id);
         if (!item) continue;
         const res = await fetch(`${API_URL}/api/trash/delete/${item.type}s/${id}/`, {
           method: 'POST',
-          headers: { 'Authorization': `Bearer ${token}` },
+          headers: { 'Authorization': `Bearer ${access}` },
         });
         if (!res.ok) throw new Error('Ошибка удаления');
       }

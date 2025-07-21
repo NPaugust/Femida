@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import { Inter } from "next/font/google";
 import "./globals.css";
 import ClientLayout from '../components/ClientLayout';
-import I18nProvider from '../components/I18nProvider';
+import AppProviders from '../components/AppProviders';
 
 const inter = Inter({
   variable: "--font-inter",
@@ -18,12 +18,10 @@ export const metadata: Metadata = {
 export default function Layout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="ru">
-      <body
-        className={`${inter.variable} antialiased bg-gray-50`}
-      >
-        <I18nProvider>
+      <body className={`${inter.variable} antialiased bg-gray-50`}>
+        <AppProviders>
           <ClientLayout>{children}</ClientLayout>
-        </I18nProvider>
+        </AppProviders>
       </body>
     </html>
   );

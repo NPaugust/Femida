@@ -1,4 +1,4 @@
-"use client";
+'use client';
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { FaBed, FaUser, FaCalendarCheck, FaChartBar, FaBuilding, FaMoneyBillWave, FaUsers, FaPlus, FaFileCsv, FaUsersCog, FaRegSmile, FaTrash } from "react-icons/fa";
@@ -27,6 +27,8 @@ ChartJS.register(
   Tooltip,
   Legend
 );
+import { useSelector } from 'react-redux';
+import { RootState } from '../store';
 
 interface DashboardStats {
   freeRooms: number;
@@ -77,7 +79,10 @@ export default function DashboardPage() {
   const [openStats, setOpenStats] = useState(false);
   const [openData, setOpenData] = useState(false);
   const [showAllSections, setShowAllSections] = useState(false);
-  const [userRole, setUserRole] = useState<string>('admin');
+  const auth = useSelector((state: RootState) => state.auth);
+  const access = auth.access;
+  const user = auth.user;
+  const userRole = auth.role || 'admin';
 
   const [stats, setStats] = useState<DashboardStats>({
     freeRooms: 0,
@@ -100,21 +105,8 @@ export default function DashboardPage() {
 
   const [userName, setUserName] = useState('Пользователь');
   useEffect(() => {
-    const user = localStorage.getItem('user');
-    const role = localStorage.getItem('role');
-    
-    if (user) {
-      try {
-        const parsed = JSON.parse(user);
-        setUserName(parsed.first_name || parsed.username || 'Пользователь');
-        setUserRole(parsed.role || role || 'admin');
-      } catch {
-        setUserRole(role || 'admin');
-      }
-    } else if (role) {
-      setUserRole(role);
-    }
-  }, []);
+    setUserName(user?.first_name || user?.username || 'Пользователь');
+  }, [user]);
 
   useEffect(() => {
     fetchDashboardData();
@@ -122,16 +114,15 @@ export default function DashboardPage() {
 
   const fetchDashboardData = async () => {
     try {
-      const token = localStorage.getItem('access');
-      if (!token) {
+      if (!access) {
         window.location.href = '/login';
         return;
       }
       setLoading(true);
       const [roomsResponse, guestsResponse, bookingsResponse] = await Promise.all([
-        fetch(`${API_URL}/api/rooms/`, { headers: { Authorization: `Bearer ${token}` } }),
-        fetch(`${API_URL}/api/guests/`, { headers: { Authorization: `Bearer ${token}` } }),
-        fetch(`${API_URL}/api/bookings/`, { headers: { Authorization: `Bearer ${token}` } }),
+        fetch(`${API_URL}/api/rooms/`, { headers: { Authorization: `Bearer ${access}` } }),
+        fetch(`${API_URL}/api/guests/`, { headers: { Authorization: `Bearer ${access}` } }),
+        fetch(`${API_URL}/api/bookings/`, { headers: { Authorization: `Bearer ${access}` } }),
       ]);
       if (roomsResponse.ok && guestsResponse.ok && bookingsResponse.ok) {
         const [roomsData, guestsData, bookingsData] = await Promise.all([

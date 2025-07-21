@@ -7,6 +7,8 @@ import LoadingSpinner from '../../components/LoadingSpinner';
 import { API_URL } from '../../shared/api';
 import React from 'react';
 import Pagination from '../../components/Pagination';
+import { useSelector } from 'react-redux';
+import { RootState } from '../store';
 
 interface Building {
   id: number;
@@ -16,11 +18,12 @@ interface Building {
   status?: 'open' | 'repair' | 'closed';
 }
 
-function BuildingModal({ open, onClose, onSave, initial }: {
+function BuildingModal({ open, onClose, onSave, initial, buildings }: {
   open: boolean;
   onClose: () => void;
   onSave: (b: Building) => void;
   initial?: Building | null;
+  buildings: Building[];
 }) {
   const [form, setForm] = useState({
     name: initial?.name || '',
@@ -47,22 +50,36 @@ function BuildingModal({ open, onClose, onSave, initial }: {
     setForm(f => ({ ...f, [e.target.name]: e.target.value }));
   };
 
+  const access = useSelector((state: RootState) => state.auth.access);
+  // Получаем список всех зданий из props или из Redux (если нужно)
+  // const buildingsList = useSelector((state: RootState) => state.buildings?.buildings || []);
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!form.name.trim()) {
       setError('Название обязательно');
       return;
     }
+    // Валидация на уникальность названия и адреса
+    const normalizedName = form.name.trim().toLowerCase();
+    const normalizedAddress = form.address.trim().toLowerCase();
+    const duplicate = buildings.some((b: Building) =>
+      b.id !== initial?.id &&
+      (b.name.trim().toLowerCase() === normalizedName || (b.address || '').trim().toLowerCase() === normalizedAddress)
+    );
+    if (duplicate) {
+      setError('Корпус с таким названием или адресом уже существует');
+      return;
+    }
     setLoading(true);
     try {
-      const token = localStorage.getItem('access');
       const url = initial ? `${API_URL}/api/buildings/${initial.id}/` : `${API_URL}/api/buildings/`;
       const method = initial ? 'PUT' : 'POST';
       const res = await fetch(url, {
         method,
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`,
+          'Authorization': `Bearer ${access}`,
         },
         body: JSON.stringify(form),
       });
@@ -146,13 +163,15 @@ export default function BuildingsPage() {
   const [currentPage, setCurrentPage] = useState(1);
   const buildingsPerPage = 9;
 
+  const access = useSelector((state: RootState) => state.auth.access);
+
   useEffect(() => { 
     fetchBuildings(); 
   }, []);
   
   const fetchBuildings = async () => {
     try {
-      const token = localStorage.getItem('access');
+      const token = access;
       const res = await fetch(`${API_URL}/api/buildings/`, { headers: { 'Authorization': `Bearer ${token}` } });
       if (!res.ok) throw new Error('Ошибка загрузки');
       const buildingsData = await res.json();
@@ -176,7 +195,7 @@ export default function BuildingsPage() {
   const confirmDelete = async () => {
     if (!deleteId) return;
     try {
-      const token = localStorage.getItem('access');
+      const token = access;
       const res = await fetch(`${API_URL}/api/buildings/${deleteId}/`, { method: 'DELETE', headers: { 'Authorization': `Bearer ${token}` } });
       if (res.ok) setBuildings(prev => prev.filter(x => x.id !== deleteId));
       else setError('Ошибка удаления');
@@ -188,7 +207,7 @@ export default function BuildingsPage() {
   const fetchRoomsForBuilding = async (buildingId: number) => {
     if (roomsByBuilding[buildingId]) return;
     try {
-      const token = localStorage.getItem('access');
+      const token = access;
       const res = await fetch(`${API_URL}/api/rooms/?building_id=${buildingId}`, { headers: { 'Authorization': `Bearer ${token}` } });
       if (!res.ok) return;
       let data = await res.json();
@@ -380,17 +399,11 @@ export default function BuildingsPage() {
                             }
                             return (
                               <div key={room.id} className={`flex items-center gap-3 px-4 py-3 rounded-lg shadow-sm border ${color} min-w-[200px] transition-all hover:shadow-md`}>
-                                <FaBed className='text-lg' />
-                                <div className='flex flex-col'>
-                                  <span className='font-bold text-lg'>{room.number}</span>
-                                  <span className='text-xs opacity-75'>{statusText}</span>
+                                <FaBed className='text-xl' />
+                                <div>
+                                  <div className='font-semibold'>{room.number}</div>
+                                  <div className='text-xs text-gray-500'>{statusText}</div>
                                 </div>
-                                {room.price_per_night && (
-                                  <div className='ml-auto text-right'>
-                                    <div className='text-sm font-semibold'>{Math.round(room.price_per_night).toLocaleString()} сом</div>
-                                    <div className='text-xs opacity-75'>за сутки</div>
-                                  </div>
-                                )}
                               </div>
                             );
                           })}
@@ -403,53 +416,33 @@ export default function BuildingsPage() {
             </tbody>
           </table>
         </div>
-      </div>
-      {/* Пагинация */}
-      {totalPages > 1 && (
-        <div className="px-6 py-4 bg-white border-t border-gray-200">
-          <div className="flex items-center justify-between">
-            <div className="text-sm text-gray-700">
-              Показано {((currentPage - 1) * buildingsPerPage) + 1} - {Math.min(currentPage * buildingsPerPage, filteredBuildings.length)} из {filteredBuildings.length}
-            </div>
-            <Pagination
-              currentPage={currentPage}
-              totalPages={totalPages}
-              onPageChange={setCurrentPage}
-            />
-          </div>
-        </div>
-      )}
-      <BuildingModal open={showModal} onClose={() => { setShowModal(false); setEditing(null); }} onSave={handleSave} initial={editing} />
-      {/* Модалка подтверждения удаления */}
-      {showConfirmDelete && (
-        <div className='fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm animate-fade-in'>
-          <div className='bg-white rounded-2xl shadow-2xl p-8 w-full max-w-md relative animate-scale-in border border-gray-100'>
-            <div className="flex items-center gap-3 mb-6">
-              <div className="w-12 h-12 bg-red-100 rounded-full flex items-center justify-center">
-                <FaTrash className="text-red-600 text-xl" />
+        <Pagination
+          currentPage={currentPage}
+          totalPages={totalPages}
+          onPageChange={setCurrentPage}
+        />
+        {showModal && (
+          <BuildingModal
+            open={showModal}
+            onClose={() => { setShowModal(false); setEditing(null); }}
+            onSave={handleSave}
+            initial={editing}
+            buildings={buildings}
+          />
+        )}
+        {showConfirmDelete && (
+          <div className='fixed inset-0 z-50 flex items-center justify-center bg-black/50'>
+            <div className='bg-white rounded-xl shadow-xl p-8 max-w-sm w-full'>
+              <div className='text-lg font-bold mb-4 text-red-700'>Удалить корпус?</div>
+              <div className='mb-6 text-gray-700'>Вы уверены, что хотите удалить этот корпус? Это действие нельзя отменить.</div>
+              <div className='flex justify-end gap-3'>
+                <button className='px-4 py-2 rounded bg-gray-200 hover:bg-gray-300' onClick={() => setShowConfirmDelete(false)}>Отмена</button>
+                <button className='px-4 py-2 rounded bg-red-600 text-white hover:bg-red-700' onClick={confirmDelete}>Удалить</button>
               </div>
-              <h2 className='text-xl font-bold text-gray-900'>Удалить корпус?</h2>
-            </div>
-            <p className='mb-6 text-gray-600 text-lg'>Вы уверены, что хотите удалить корпус <b>№{deleteId}</b>?</p>
-            <div className='flex justify-end gap-3'>
-              <Button
-                variant="ghost"
-                onClick={() => setShowConfirmDelete(false)}
-                className="hover:bg-gray-100"
-              >
-                Отмена
-              </Button>
-              <Button
-                variant="danger"
-                onClick={confirmDelete}
-                icon={<FaTrash />}
-              >
-                Удалить
-              </Button>
             </div>
           </div>
-        </div>
-      )}
+        )}
+      </div>
     </div>
   );
-} 
+}

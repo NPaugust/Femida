@@ -6,6 +6,8 @@ import { API_URL } from '../shared/api';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from '../shared/hooks/useAuth';
 import { useRouter } from 'next/navigation';
+import { useSelector, useDispatch } from 'react-redux';
+import { RootState, AppDispatch, setAuth } from '../app/store';
 
 // Логотип Фемида
 const FemidaLogo = () => (
@@ -22,8 +24,12 @@ type User = {
 };
 
 export default function Header({ onSidebarOpen }: { onSidebarOpen: () => void }) {
-  const [user, setUser] = useState<User | null>(null);
-  const [loading, setLoading] = useState(true);
+  const dispatch = useDispatch<AppDispatch>();
+  const auth = useSelector((state: RootState) => state.auth);
+  const user = auth.user;
+  const role = auth.role;
+  const access = auth.access;
+  const [loading, setLoading] = useState(!user);
   const [showProfile, setShowProfile] = useState(false);
   const [showDocumentation, setShowDocumentation] = useState(false);
   const [editMode, setEditMode] = useState(false);
@@ -39,20 +45,16 @@ export default function Header({ onSidebarOpen }: { onSidebarOpen: () => void })
   useEffect(() => {
     const fetchUser = async () => {
       try {
-        const token = localStorage.getItem('access');
-        if (!token) {
+        if (!access) {
           window.location.href = '/login';
           return;
         }
-
         const res = await fetch(`${API_URL}/api/users/me/`, {
-          headers: { Authorization: `Bearer ${token}` },
+          headers: { Authorization: `Bearer ${access}` },
         });
-
         if (res.ok) {
           const userData = await res.json();
-          setUser(userData);
-          localStorage.setItem('role', userData.role);
+          dispatch(setAuth({ user: userData, role: userData.role }));
         }
       } catch (error) {
         console.error('Ошибка загрузки пользователя:', error);
@@ -60,15 +62,9 @@ export default function Header({ onSidebarOpen }: { onSidebarOpen: () => void })
         setLoading(false);
       }
     };
-
     fetchUser();
-
-    // Устанавливаем язык из localStorage при загрузке
-    const lang = localStorage.getItem('lang');
-    if (lang && lang !== i18n.language) {
-      i18n.changeLanguage(lang);
-    }
-  }, []);
+    // Язык из Redux (если есть langSlice), иначе i18n.language
+  }, [access, dispatch]);
 
   const handleLogout = () => {
     logout();
@@ -99,37 +95,41 @@ export default function Header({ onSidebarOpen }: { onSidebarOpen: () => void })
 
   const handleEditSave = async () => {
     try {
-      const token = localStorage.getItem('access');
-      const res = await fetch(`${API_URL}/api/users/profile/`, {
-        method: 'PUT',
+      if (!access || !user?.id) return;
+      // Собираем только нужные поля
+      const payload: any = {
+        first_name: editForm.first_name,
+        last_name: editForm.last_name,
+      };
+      // Если backend требует username/email, добавь их:
+      if (user.username) payload.username = user.username;
+      if (user.email) payload.email = user.email;
+
+      const res = await fetch(`${API_URL}/api/users/${user.id}/`, {
+        method: 'PATCH',
         headers: {
           'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`,
+          Authorization: `Bearer ${access}`,
         },
-        body: JSON.stringify(editForm),
+        body: JSON.stringify(payload),
       });
-      
-      if (res.ok && user) {
-        // Обновить данные пользователя в localStorage и состоянии
-        const updatedUser: User = { 
-          ...user, 
-          first_name: editForm.first_name,
-          last_name: editForm.last_name,
-        };
-        localStorage.setItem('user', JSON.stringify(updatedUser));
-        setUser(updatedUser);
+      if (res.ok) {
+        const updatedUser = await res.json();
+        dispatch(setAuth({ user: updatedUser }));
         setEditMode(false);
       } else {
-        console.error('Ошибка обновления профиля');
+        const errorData = await res.json();
+        alert(errorData.detail || errorData.error || 'Ошибка обновления профиля');
       }
     } catch (error) {
-      console.error('Ошибка сети');
+      alert('Ошибка сети');
     }
   };
 
+  // handleLangChange — если есть langSlice, диспатчить setLang, иначе i18n.changeLanguage
   const handleLangChange = (lang: string) => {
     i18n.changeLanguage(lang);
-    localStorage.setItem('lang', lang);
+    // localStorage.setItem('lang', lang); // Удалено
   };
 
   const handleSearch = (e: React.FormEvent) => {

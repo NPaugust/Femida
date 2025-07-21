@@ -1,3 +1,5 @@
+'use client';
+
 import React from 'react';
 import { FaFileCsv, FaDownload, FaTimes } from 'react-icons/fa';
 

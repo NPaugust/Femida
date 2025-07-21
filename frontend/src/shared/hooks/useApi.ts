@@ -1,13 +1,8 @@
-import { useState, useEffect } from 'react';
+import { useSelector } from 'react-redux';
+import { RootState } from '../../app/store';
 
 export const useApi = () => {
-  const [token, setToken] = useState<string | null>(null);
-
-  useEffect(() => {
-    if (typeof window !== 'undefined') {
-      setToken(localStorage.getItem('access'));
-    }
-  }, []);
+  const token = useSelector((state: RootState) => state.auth.access);
 
   const handleApiRequest = async (url: string, options: RequestInit = {}) => {
     if (!token) {
@@ -24,9 +19,6 @@ export const useApi = () => {
     });
 
     if (response.status === 401) {
-      // Токен истек или недействителен
-      localStorage.removeItem('access');
-      localStorage.removeItem('refresh');
       window.location.href = '/login';
       return null;
     }
@@ -37,7 +29,6 @@ export const useApi = () => {
   const handleApiRequestWithAuth = async (url: string, options: RequestInit = {}) => {
     const response = await handleApiRequest(url, options);
     if (!response) return null;
-    
     try {
       return await response.json();
     } catch (error) {

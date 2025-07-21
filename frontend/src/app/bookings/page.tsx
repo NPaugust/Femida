@@ -18,6 +18,11 @@ import { toZonedTime, format as formatTz } from 'date-fns-tz';
 const TIMEZONE = 'Asia/Bishkek';
 import BookingTable from './BookingTable';
 import BookingCalendar from './BookingCalendar';
+// Импортируем GuestModal и RoomModal
+import GuestModal from '../../components/GuestModal';
+import RoomModal, { Building } from '../../components/RoomModal';
+import { useSelector, useDispatch } from 'react-redux';
+import { RootState, AppDispatch, setBookings, addBooking, updateBooking, removeBooking, setBookingsLoading, setBookingsError, setGuests, setRooms } from '../store';
 
 // Типы данных
 interface Room {
@@ -56,7 +61,6 @@ const STATUS_LABELS: Record<string, string> = {
   active: 'Активный',
   completed: 'Завершён',
   cancelled: 'Отменён',
-  pending: 'Ожидает',
 };
 
 const TABS = [
@@ -108,6 +112,7 @@ function BookingModal({ open, onClose, onSave, guests, rooms, initial }: Booking
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
   const modalRef = useRef<HTMLDivElement>(null);
+  const access = useSelector((state: RootState) => state.auth.access);
 
   // Добавляем состояние для времени заезда и выезда
   const [checkInTime, setCheckInTime] = useState(initial ? (initial.check_in ? toZonedTime(new Date(initial.check_in), TIMEZONE).toTimeString().slice(0,5) : '00:00') : '00:00');
@@ -178,8 +183,28 @@ function BookingModal({ open, onClose, onSave, guests, rooms, initial }: Booking
     }
   }, [open]);
 
+  const [showPastDateConfirm, setShowPastDateConfirm] = useState(false);
+  const checkInInputRef = useRef<HTMLInputElement>(null);
+  const checkOutInputRef = useRef<HTMLInputElement>(null);
+
+  const isPastDate = (dateStr: string, time: string) => {
+    if (!dateStr) return false;
+    const date = new Date(`${dateStr}T${time}`);
+    return date < new Date();
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    setError('');
+    // Проверка на прошлое время
+    if (isPastDate(form.check_in, checkInTime)) {
+      setShowPastDateConfirm(true);
+      return;
+    }
+    await doSubmit();
+  };
+
+  const doSubmit = async () => {
     setSaving(true);
     setError('');
     try {
@@ -196,7 +221,7 @@ function BookingModal({ open, onClose, onSave, guests, rooms, initial }: Booking
           method: 'PATCH',
           headers: {
             'Content-Type': 'application/json',
-            'Authorization': `Bearer ${localStorage.getItem('access')}`,
+            'Authorization': `Bearer ${access}`,
           },
           body: JSON.stringify({
             payment_status: form.payment_status,
@@ -216,7 +241,7 @@ function BookingModal({ open, onClose, onSave, guests, rooms, initial }: Booking
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
-            'Authorization': `Bearer ${localStorage.getItem('access')}`,
+            'Authorization': `Bearer ${access}`,
           },
           body: JSON.stringify({
             payment_status: form.payment_status,
@@ -265,165 +290,243 @@ function BookingModal({ open, onClose, onSave, guests, rooms, initial }: Booking
     const m = ((i % 4) * 15).toString().padStart(2, '0');
     return `${h}:${m}`;
   });
+  const [showGuestModal, setShowGuestModal] = useState(false);
+  const [showRoomModal, setShowRoomModal] = useState(false);
+  const [localGuests, setLocalGuests] = useState(guests);
+  const [localRooms, setLocalRooms] = useState(rooms);
+
+  // Получаем список зданий для RoomModal
+  const buildings: Building[] = Array.from(
+    new Map(
+      rooms
+        .map(r => r.building)
+        .filter((b): b is Building => Boolean(b))
+        .map(b => [b.id, b])
+    ).values()
+  );
+
+  // После успешного добавления гостя
+  const handleGuestAdded = (guest: Guest) => {
+    setLocalGuests(prev => [...prev, guest]);
+    setForm(f => ({ ...f, guest_id: guest.id }));
+    setShowGuestModal(false);
+    if (typeof window !== 'undefined' && (window as any).showToast) {
+      (window as any).showToast({ type: 'success', title: 'Гость добавлен' });
+    }
+    setTimeout(() => {
+      if (document.activeElement instanceof HTMLElement) document.activeElement.blur();
+      if (checkInInputRef.current) checkInInputRef.current.focus();
+    }, 200);
+  };
+  // После успешного добавления номера
+  const handleRoomAdded = (room: Room) => {
+    setLocalRooms(prev => [...prev, room]);
+    setForm(f => ({ ...f, room_id: room.id }));
+    setShowRoomModal(false);
+    if (typeof window !== 'undefined' && (window as any).showToast) {
+      (window as any).showToast({ type: 'success', title: 'Номер добавлен' });
+    }
+    setTimeout(() => {
+      if (document.activeElement instanceof HTMLElement) document.activeElement.blur();
+      if (checkInInputRef.current) checkInInputRef.current.focus();
+    }, 200);
+  };
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 backdrop-blur-sm animate-fade-in">
-      <div ref={modalRef} tabIndex={-1} className="bg-white rounded-xl shadow-2xl p-8 w-full max-w-xl relative animate-modal-in border border-gray-100 focus:outline-none">
-        <h2 className="text-xl font-bold mb-6">{initial ? 'Редактировать' : 'Добавить'} бронирование</h2>
-        <button onClick={onClose} className="absolute top-4 right-4 text-gray-400 hover:text-gray-700 text-2xl font-bold focus:outline-none">×</button>
-        <form className="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-4" onSubmit={handleSubmit}>
-          <label className="font-semibold md:text-right md:pr-2 flex items-center">Статус оплаты:</label>
-          <select className="input w-full" value={form.payment_status} onChange={e => setForm(f => ({ ...f, payment_status: e.target.value }))}>
-            {PAYMENT_STATUSES.map(opt => <option key={opt.value} value={opt.value}>{opt.label}</option>)}
-          </select>
-
-          <label className="font-semibold md:text-right md:pr-2 flex items-center">Гость:</label>
-          <select className="input w-full" value={form.guest_id} onChange={e => setForm(f => ({ ...f, guest_id: e.target.value }))} required>
-            <option value="">Выберите гостя</option>
-            {guests.map(g => <option key={g.id} value={g.id}>{g.full_name}</option>)}
-          </select>
-
-          <label className="font-semibold md:text-right md:pr-2 flex items-center">Количество гостей:</label>
-          <input type="number" min={1} max={10} className="input w-full" value={form.people_count} onChange={e => setForm(f => ({ ...f, people_count: +e.target.value, room_id: '' }))} />
-
-          <label className="font-semibold md:text-right md:pr-2 flex items-center">Номер:</label>
-          <select className="input w-full" value={form.room_id} onChange={e => setForm(f => ({ ...f, room_id: e.target.value }))} required>
-            <option value="">Выберите номер</option>
-            {rooms.filter(r => r.capacity >= form.people_count).map(r => (
-              <option key={r.id} value={r.id}>
-                {r.number} • {r.building?.name || 'Неизвестное здание'} • Вместимость: {r.capacity}
-              </option>
-            ))}
-          </select>
-
-          <label className="font-semibold md:text-right md:pr-2 flex items-center">Дата заезда:</label>
-          <div className="flex gap-2 relative">
-            <DatePicker
-              selected={form.check_in && checkInTime ? toZonedTime(new Date(`${form.check_in}T${checkInTime}`), TIMEZONE) : null}
-              onChange={date => {
-                if (date) {
-                  setForm(f => ({ ...f, check_in: formatTz(toZonedTime(date, TIMEZONE), 'yyyy-MM-dd', { timeZone: TIMEZONE }) }));
-                } else {
-                  setForm(f => ({ ...f, check_in: '' }));
-                }
-              }}
-              dateFormat="dd.MM.yyyy"
-              className="input w-36"
-              placeholderText="дд.мм.гг"
-              calendarClassName="shadow-xl"
-              locale={ru}
-              autoComplete="off"
-              onKeyDown={e => e.preventDefault()}
-              customInput={<input className="input w-36" readOnly placeholder="дд.мм.гггг" />}
-            />
-            <div className="relative w-28">
-              <button
-                type="button"
-                className="input w-full text-left"
-                onClick={() => setShowCheckInDropdown(v => !v)}
-              >
-                {checkInTime}
-              </button>
-              {showCheckInDropdown && (
-                <div className="absolute z-50 bg-white border rounded shadow max-h-48 overflow-y-auto mt-1 w-full">
-                  {timeOptions.map(t => (
-                    <div
-                      key={t}
-                      ref={el => { checkInTimeRefs.current[t] = el; }}
-                      className={`px-3 py-2 hover:bg-blue-100 cursor-pointer ${checkInTime === t ? 'bg-blue-50 font-bold' : ''}`}
-                      onClick={() => { setCheckInTime(t); setShowCheckInDropdown(false); }}
-                    >
-                      {t}
-                    </div>
-                  ))}
-                </div>
-              )}
+    <>
+      <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 backdrop-blur-sm animate-fade-in">
+        <div ref={modalRef} tabIndex={-1} className="bg-white rounded-xl shadow-2xl p-8 w-full max-w-xl relative animate-modal-in border border-gray-100 focus:outline-none">
+          <h2 className="text-xl font-bold mb-6">{initial ? 'Редактировать' : 'Добавить'} бронирование</h2>
+          <button onClick={onClose} className="absolute top-4 right-4 text-gray-400 hover:text-gray-700 text-2xl font-bold focus:outline-none">×</button>
+          <form className="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-4" onSubmit={handleSubmit}>
+            <label className="font-semibold md:text-right md:pr-2 flex items-center">Гость:</label>
+            <div className="flex gap-2 items-center">
+              <select className="input w-full" value={form.guest_id} onChange={e => setForm(f => ({ ...f, guest_id: e.target.value }))} required>
+                <option value="">Выберите гостя</option>
+                {localGuests.map(g => <option key={g.id} value={g.id}>{g.full_name}</option>)}
+              </select>
+              <button type="button" className="text-blue-600 hover:text-blue-800 text-xl" title="Добавить гостя" onClick={() => setShowGuestModal(true)} disabled={showGuestModal || showRoomModal}>+</button>
             </div>
-          </div>
 
-          <label className="font-semibold md:text-right md:pr-2 flex items-center">Дата выезда:</label>
-          <div className="flex gap-2 relative">
-            <DatePicker
-              selected={form.check_out && checkOutTime ? toZonedTime(new Date(`${form.check_out}T${checkOutTime}`), TIMEZONE) : null}
-              onChange={date => {
-                if (date) {
-                  setForm(f => ({ ...f, check_out: formatTz(toZonedTime(date, TIMEZONE), 'yyyy-MM-dd', { timeZone: TIMEZONE }) }));
-                } else {
-                  setForm(f => ({ ...f, check_out: '' }));
-                }
-              }}
-              dateFormat="dd.MM.yyyy"
-              className="input w-36"
-              placeholderText="дд.мм.гг"
-              calendarClassName="shadow-xl"
-              locale={ru}
-              autoComplete="off"
-              onKeyDown={e => e.preventDefault()}
-              customInput={<input className="input w-36" readOnly placeholder="дд.мм.гггг" />}
-            />
-            <div className="relative w-28">
-              <button
-                type="button"
-                className="input w-full text-left"
-                onClick={() => setShowCheckOutDropdown(v => !v)}
-              >
-                {checkOutTime}
-              </button>
-              {showCheckOutDropdown && (
-                <div className="absolute z-50 bg-white border rounded shadow max-h-48 overflow-y-auto mt-1 w-full">
-                  {timeOptions.map(t => (
-                    <div
-                      key={t}
-                      ref={el => { checkOutTimeRefs.current[t] = el; }}
-                      className={`px-3 py-2 hover:bg-blue-100 cursor-pointer ${checkOutTime === t ? 'bg-blue-50 font-bold' : ''}`}
-                      onClick={() => { setCheckOutTime(t); setShowCheckOutDropdown(false); }}
-                    >
-                      {t}
-                    </div>
-                  ))}
-                </div>
-              )}
+            <label className="font-semibold md:text-right md:pr-2 flex items-center">Количество гостей:</label>
+            <input type="number" min={1} max={10} className="input w-full" value={form.people_count} onChange={e => setForm(f => ({ ...f, people_count: +e.target.value, room_id: '' }))} />
+
+            <label className="font-semibold md:text-right md:pr-2 flex items-center">Номер:</label>
+            <div className="flex gap-2 items-center">
+              <select className="input w-full" value={form.room_id} onChange={e => setForm(f => ({ ...f, room_id: e.target.value }))} required>
+                <option value="">Выберите номер</option>
+                {localRooms.filter(r => r.capacity >= form.people_count).map(r => (
+                  <option key={r.id} value={r.id}>
+                    {r.number} • {r.building?.name || 'Неизвестное здание'} • Вместимость: {r.capacity}
+                  </option>
+                ))}
+              </select>
+              <button type="button" className="text-blue-600 hover:text-blue-800 text-xl" title="Добавить номер" onClick={() => setShowRoomModal(true)} disabled={showGuestModal || showRoomModal}>+</button>
             </div>
-          </div>
 
-
-
-          <label className="font-semibold md:text-right md:pr-2 flex items-center">Способ оплаты:</label>
-          <select className="input w-full" value={form.payment_method} onChange={e => setForm(f => ({ ...f, payment_method: e.target.value }))}>
-            {PAYMENT_METHODS.map(opt => <option key={opt.value} value={opt.value}>{opt.label}</option>)}
-          </select>
-
-          {/* Расчет стоимости за период */}
-          {form.check_in && form.check_out && form.room_id && (
-            <>
-              <label className="font-semibold md:text-right md:pr-2 flex items-center">Количество дней:</label>
-              <div className="text-sm text-gray-600 flex items-center">
-                {Math.ceil((new Date(form.check_out).getTime() - new Date(form.check_in).getTime()) / (1000 * 60 * 60 * 24))} дней
-              </div>
-
-              <label className="font-semibold md:text-right md:pr-2 flex items-center">Стоимость за период:</label>
-              <div className="text-sm font-semibold text-green-600 flex items-center">
-                {(() => {
-                  const selectedRoom = rooms.find(r => r.id === parseInt(form.room_id));
-                  if (selectedRoom && form.check_in && form.check_out) {
-                    const days = Math.ceil((new Date(form.check_out).getTime() - new Date(form.check_in).getTime()) / (1000 * 60 * 60 * 24));
-                    const pricePerNight = selectedRoom.price_per_night || 0;
-                    return Math.round(pricePerNight * days).toLocaleString() + ' сом';
+            <label className="font-semibold md:text-right md:pr-2 flex items-center">Дата заезда:</label>
+            <div className="flex gap-2 relative">
+              <DatePicker
+                selected={form.check_in && checkInTime ? toZonedTime(new Date(`${form.check_in}T${checkInTime}`), TIMEZONE) : null}
+                onChange={date => {
+                  if (date) {
+                    setForm(f => ({ ...f, check_in: formatTz(toZonedTime(date, TIMEZONE), 'yyyy-MM-dd', { timeZone: TIMEZONE }) }));
+                  } else {
+                    setForm(f => ({ ...f, check_in: '' }));
                   }
-                  return '—';
-                })()}
+                }}
+                dateFormat="dd.MM.yyyy"
+                className="input w-36"
+                placeholderText="дд.мм.гг"
+                calendarClassName="shadow-xl"
+                locale={ru}
+                autoComplete="off"
+                onKeyDown={e => e.preventDefault()}
+                customInput={<input className="input w-36" readOnly placeholder="дд.мм.гггг" ref={checkInInputRef} />}
+              />
+              <div className="relative w-28">
+                <button
+                  type="button"
+                  className="input w-full text-left"
+                  onClick={() => setShowCheckInDropdown(v => !v)}
+                >
+                  {checkInTime}
+                </button>
+                {showCheckInDropdown && (
+                  <div className="absolute z-50 bg-white border rounded shadow max-h-48 overflow-y-auto mt-1 w-full">
+                    {timeOptions.map(t => (
+                      <div
+                        key={t}
+                        ref={el => { checkInTimeRefs.current[t] = el; }}
+                        className={`px-3 py-2 hover:bg-blue-100 cursor-pointer ${checkInTime === t ? 'bg-blue-50 font-bold' : ''}`}
+                        onClick={() => { setCheckInTime(t); setShowCheckInDropdown(false); }}
+                      >
+                        {t}
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
-            </>
-          )}
+            </div>
 
-          {/* Кнопки */}
-          <div className="md:col-span-2 flex justify-end gap-3 mt-6">
-            <button type="button" onClick={onClose} className="bg-gray-200 hover:bg-gray-300 text-gray-700 px-5 py-2 rounded font-semibold">Отмена</button>
-            <button type="submit" disabled={saving} className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-2 rounded font-semibold shadow disabled:opacity-60 disabled:cursor-not-allowed">{saving ? 'Сохранение...' : 'Сохранить'}</button>
-          </div>
-          {error && <div className="md:col-span-2 text-red-500 text-sm mt-2">{error}</div>}
-        </form>
+            <label className="font-semibold md:text-right md:pr-2 flex items-center">Дата выезда:</label>
+            <div className="flex gap-2 relative">
+              <DatePicker
+                selected={form.check_out && checkOutTime ? toZonedTime(new Date(`${form.check_out}T${checkOutTime}`), TIMEZONE) : null}
+                onChange={date => {
+                  if (date) {
+                    setForm(f => ({ ...f, check_out: formatTz(toZonedTime(date, TIMEZONE), 'yyyy-MM-dd', { timeZone: TIMEZONE }) }));
+                  } else {
+                    setForm(f => ({ ...f, check_out: '' }));
+                  }
+                }}
+                dateFormat="dd.MM.yyyy"
+                className="input w-36"
+                placeholderText="дд.мм.гг"
+                calendarClassName="shadow-xl"
+                locale={ru}
+                autoComplete="off"
+                onKeyDown={e => e.preventDefault()}
+                customInput={<input className="input w-36" readOnly placeholder="дд.мм.гггг" ref={checkOutInputRef} />}
+              />
+              <div className="relative w-28">
+                <button
+                  type="button"
+                  className="input w-full text-left"
+                  onClick={() => setShowCheckOutDropdown(v => !v)}
+                >
+                  {checkOutTime}
+                </button>
+                {showCheckOutDropdown && (
+                  <div className="absolute z-50 bg-white border rounded shadow max-h-48 overflow-y-auto mt-1 w-full">
+                    {timeOptions.map(t => (
+                      <div
+                        key={t}
+                        ref={el => { checkOutTimeRefs.current[t] = el; }}
+                        className={`px-3 py-2 hover:bg-blue-100 cursor-pointer ${checkOutTime === t ? 'bg-blue-50 font-bold' : ''}`}
+                        onClick={() => { setCheckOutTime(t); setShowCheckOutDropdown(false); }}
+                      >
+                        {t}
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Статус оплаты переносим сюда */}
+            <label className="font-semibold md:text-right md:pr-2 flex items-center">Статус оплаты:</label>
+            <select className="input w-full" value={form.payment_status} onChange={e => setForm(f => ({ ...f, payment_status: e.target.value }))}>
+              {PAYMENT_STATUSES.map(opt => <option key={opt.value} value={opt.value}>{opt.label}</option>)}
+            </select>
+
+            {/* Способ оплаты */}
+            <label className="font-semibold md:text-right md:pr-2 flex items-center">Способ оплаты:</label>
+            <select className="input w-full" value={form.payment_method} onChange={e => setForm(f => ({ ...f, payment_method: e.target.value }))}>
+              {PAYMENT_METHODS.map(opt => <option key={opt.value} value={opt.value}>{opt.label}</option>)}
+            </select>
+
+            {/* Расчет стоимости за период */}
+            {form.check_in && form.check_out && form.room_id && (
+              <>
+                <label className="font-semibold md:text-right md:pr-2 flex items-center">Количество дней:</label>
+                <div className="text-sm text-gray-600 flex items-center">
+                  {Math.ceil((new Date(form.check_out).getTime() - new Date(form.check_in).getTime()) / (1000 * 60 * 60 * 24))} дней
+                </div>
+
+                <label className="font-semibold md:text-right md:pr-2 flex items-center">Стоимость за период:</label>
+                <div className="text-sm font-semibold text-green-600 flex items-center">
+                  {(() => {
+                    const selectedRoom = localRooms.find(r => r.id === parseInt(form.room_id));
+                    if (selectedRoom && form.check_in && form.check_out) {
+                      const days = Math.ceil((new Date(form.check_out).getTime() - new Date(form.check_in).getTime()) / (1000 * 60 * 60 * 24));
+                      const pricePerNight = selectedRoom.price_per_night || 0;
+                      return Math.round(pricePerNight * days).toLocaleString() + ' сом';
+                    }
+                    return '—';
+                  })()}
+                </div>
+              </>
+            )}
+
+            {/* Кнопки */}
+            <div className="md:col-span-2 flex justify-end gap-3 mt-6">
+              <button type="button" onClick={onClose} className="bg-gray-200 hover:bg-gray-300 text-gray-700 px-5 py-2 rounded font-semibold">Отмена</button>
+              <button type="submit" disabled={saving} className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-2 rounded font-semibold shadow disabled:opacity-60 disabled:cursor-not-allowed">{saving ? 'Сохранение...' : 'Сохранить'}</button>
+            </div>
+            {error && <div className="md:col-span-2 text-red-500 text-sm mt-2 cursor-pointer" onClick={() => checkInInputRef.current?.focus()}>{error}</div>}
+          </form>
+        </div>
       </div>
-    </div>
+      {/* Модалка подтверждения прошлой даты */}
+      {showPastDateConfirm && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
+          <div className="bg-white rounded-xl shadow-xl p-8 max-w-sm w-full">
+            <div className="text-lg font-bold mb-4 text-yellow-700">Дата заезда в прошлом</div>
+            <div className="mb-6 text-gray-700">Вы выбрали дату заезда в прошлом. Всё равно сохранить?</div>
+            <div className="flex justify-end gap-3">
+              <button className="px-4 py-2 rounded bg-gray-200 hover:bg-gray-300" onClick={() => setShowPastDateConfirm(false)}>Отмена</button>
+              <button className="px-4 py-2 rounded bg-blue-600 text-white hover:bg-blue-700" onClick={() => { setShowPastDateConfirm(false); doSubmit(); }}>Да, сохранить</button>
+            </div>
+          </div>
+        </div>
+      )}
+      {/* Модалки добавления гостя и номера */}
+      {showGuestModal && (
+        <GuestModal
+          open={showGuestModal}
+          onClose={() => setShowGuestModal(false)}
+          onSave={handleGuestAdded}
+        />
+      )}
+      {showRoomModal && (
+        <RoomModal
+          open={showRoomModal}
+          onClose={() => setShowRoomModal(false)}
+          onSave={handleRoomAdded}
+          buildings={buildings}
+        />
+      )}
+    </>
   );
 }
 
@@ -490,14 +593,14 @@ function TooltipOnClick({ content, children }: { content: string, children: Reac
 export default function BookingsPage() {
   const { handleApiRequestWithAuth } = useApi();
   const searchParams = useSearchParams();
-  const [bookings, setBookings] = useState<Booking[]>([]);
-  const [guests, setGuests] = useState<Guest[]>([]);
-  const [rooms, setRooms] = useState<Room[]>([]);
-  const [loading, setLoading] = useState(true);
+  const dispatch = useDispatch<AppDispatch>();
+  const bookings = useSelector((state: RootState) => state.bookings.bookings);
+  const guests = useSelector((state: RootState) => state.guests.guests);
+  const rooms = useSelector((state: RootState) => state.rooms.rooms);
+  const loading = useSelector((state: RootState) => state.bookings.loading);
+  const access = useSelector((state: RootState) => state.auth.access);
   const [activeTab, setActiveTab] = useState('all');
   const [showAddModal, setShowAddModal] = useState(false);
-  const [token, setToken] = useState<string | null>(null);
-  const [tokenLoaded, setTokenLoaded] = useState(false);
   const [editBooking, setEditBooking] = useState<Booking | null>(null);
   const [deleteBooking, setDeleteBooking] = useState<Booking | null>(null);
   const [deleting, setDeleting] = useState(false);
@@ -516,6 +619,20 @@ export default function BookingsPage() {
   const [showExportModal, setShowExportModal] = useState(false);
   const [exportLoading, setExportLoading] = useState(false);
 
+  // Загрузка данных через Redux
+  const fetchAll = async () => {
+    dispatch(setBookingsLoading(true));
+    const [bookingsData, guestsData, roomsData] = await Promise.all([
+      handleApiRequestWithAuth(`${API_URL}/api/bookings/`),
+      handleApiRequestWithAuth(`${API_URL}/api/guests/`),
+      handleApiRequestWithAuth(`${API_URL}/api/rooms/`),
+    ]);
+    dispatch(setBookings(Array.isArray(bookingsData) ? bookingsData : []));
+    dispatch(setGuests(Array.isArray(guestsData) ? guestsData : []));
+    dispatch(setRooms(Array.isArray(roomsData) ? roomsData : []));
+    dispatch(setBookingsLoading(false));
+  };
+
   // Пагинация
   const [currentPage, setCurrentPage] = useState(1);
   const bookingsPerPage = 9;
@@ -527,32 +644,15 @@ export default function BookingsPage() {
 
   useEffect(() => {
     if (typeof window !== 'undefined') {
-      setToken(localStorage.getItem('access'));
-      setTokenLoaded(true);
+      dispatch(setBookingsLoading(true));
+      const token = access;
+      if (!token) {
+        window.location.href = '/login';
+        return;
+      }
+      fetchAll();
     }
-  }, []);
-
-  useEffect(() => {
-    if (!tokenLoaded) return;
-    if (!token) {
-      window.location.href = '/login';
-      return;
-    }
-    fetchAll();
-  }, [tokenLoaded, token]);
-
-  const fetchAll = async () => {
-    setLoading(true);
-    const [bookingsData, guestsData, roomsData] = await Promise.all([
-      handleApiRequestWithAuth(`${API_URL}/api/bookings/`),
-      handleApiRequestWithAuth(`${API_URL}/api/guests/`),
-      handleApiRequestWithAuth(`${API_URL}/api/rooms/`),
-    ]);
-    setBookings(Array.isArray(bookingsData) ? bookingsData : []);
-    setGuests(Array.isArray(guestsData) ? guestsData : []);
-    setRooms(Array.isArray(roomsData) ? roomsData : []);
-        setLoading(false);
-  };
+  }, [dispatch, access]);
 
   // Фильтрация по вкладкам и фильтрам
   const now = new Date();
@@ -875,7 +975,7 @@ export default function BookingsPage() {
                   setDeleting(true);
                   await fetch(`${API_URL}/api/bookings/${deleteBooking.id}/`, {
                     method: 'DELETE',
-                    headers: { 'Authorization': `Bearer ${localStorage.getItem('access')}` },
+                    headers: { 'Authorization': `Bearer ${access}` },
                   });
                   setDeleting(false);
                   setDeleteBooking(null);

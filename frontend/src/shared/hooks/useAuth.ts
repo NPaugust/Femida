@@ -1,56 +1,42 @@
-import { useState, useEffect } from 'react';
+import { useSelector, useDispatch } from 'react-redux';
+import { RootState, AppDispatch, setAuth, logout as reduxLogout } from '../../app/store';
+import { useCallback } from 'react';
 
 export const useAuth = () => {
-  const [isAuthenticated, setIsAuthenticated] = useState<boolean | null>(null);
-  const [user, setUser] = useState<any>(null);
-  const [loading, setLoading] = useState(true);
+  const auth = useSelector((state: RootState) => state.auth);
+  const dispatch = useDispatch<AppDispatch>();
 
-  useEffect(() => {
-    const checkAuth = () => {
-      const token = localStorage.getItem('access');
-      setIsAuthenticated(!!token);
-      setLoading(false);
-    };
-
-    checkAuth();
-  }, []);
-
-  const login = (accessToken: string, refreshToken: string, role: string) => {
-    // Сохраняем в localStorage
-    localStorage.setItem('access', accessToken);
-    localStorage.setItem('refresh', refreshToken);
-    localStorage.setItem('role', role);
-    
-    // Сохраняем в cookies для middleware
+  // Логин: обновляет store и cookies (если нужно)
+  const login = useCallback((accessToken: string, refreshToken: string, role: string, user?: any) => {
     document.cookie = `access=${accessToken}; path=/; max-age=${7 * 24 * 60 * 60}; SameSite=Strict`;
     document.cookie = `refresh=${refreshToken}; path=/; max-age=${7 * 24 * 60 * 60}; SameSite=Strict`;
     document.cookie = `role=${role}; path=/; max-age=${7 * 24 * 60 * 60}; SameSite=Strict`;
-    
-    setIsAuthenticated(true);
-  };
+    if (user) document.cookie = `user=${encodeURIComponent(JSON.stringify(user))}; path=/; max-age=${7 * 24 * 60 * 60}; SameSite=Strict`;
+    dispatch(setAuth({ access: accessToken, refresh: refreshToken, role, user }));
+  }, [dispatch]);
 
-  const logout = () => {
-    // Очищаем localStorage
-    localStorage.removeItem('access');
-    localStorage.removeItem('refresh');
-    localStorage.removeItem('role');
-    
-    // Очищаем cookies
+  // Логаут: очищает store и cookies
+  const logout = useCallback(() => {
     document.cookie = 'access=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT';
     document.cookie = 'refresh=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT';
     document.cookie = 'role=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT';
-    
-    setIsAuthenticated(false);
-    setUser(null);
-  };
+    document.cookie = 'user=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT';
+    dispatch(reduxLogout());
+  }, [dispatch]);
 
-  const getToken = () => {
-    return localStorage.getItem('access');
-  };
+  // Получить токен из store
+  const getToken = useCallback(() => auth.access, [auth.access]);
+
+  // Проверка авторизации
+  const isAuthenticated = !!auth.access;
+  const user = auth.user;
+  const role = auth.role;
+  const loading = false; // Можно добавить логику загрузки при инициализации
 
   return {
     isAuthenticated,
     user,
+    role,
     loading,
     login,
     logout,

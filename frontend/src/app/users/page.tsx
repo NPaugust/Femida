@@ -11,6 +11,8 @@ import 'react-phone-input-2/lib/style.css';
 import { API_URL } from '../../shared/api';
 import ConfirmModal from '../../components/ConfirmModal';
 import Pagination from '../../components/Pagination';
+import { useSelector } from 'react-redux';
+import { RootState } from '../store';
 
 type User = {
   id: number;
@@ -64,20 +66,22 @@ export default function UsersPage() {
   const [showConfirmDelete, setShowConfirmDelete] = useState(false);
   const [selectedDeleteId, setSelectedDeleteId] = useState<number | null>(null);
 
+  const access = useSelector((state: RootState) => state.auth.access);
+  const role = useSelector((state: RootState) => state.auth.role);
+
   const fetchUsers = async () => {
     try {
-      const token = localStorage.getItem('access');
-      if (!token) {
+      if (!access) {
         window.location.href = '/login';
         return;
       }
 
       const res = await fetch(`${API_URL}/api/users/`, {
-        headers: { Authorization: `Bearer ${token}` },
+        headers: { Authorization: `Bearer ${access}` },
       });
 
       if (res.status === 403) {
-        setError('Доступ только для администратора');
+        setError('Доступ только для супер-админов');
         setLoading(false);
         return;
       }
@@ -93,7 +97,7 @@ export default function UsersPage() {
         setUsers(data);
         // Обновляем роль пользователя, если есть данные
         if (data.length > 0) {
-          localStorage.setItem('role', data[0].role);
+          // localStorage.setItem('role', data[0].role); // Удалено
         }
       } else {
         setUsers([]);
@@ -107,14 +111,17 @@ export default function UsersPage() {
     }
   };
 
+  // Проверка доступа к разделу Сотрудники
   useEffect(() => {
-    fetchUsers();
-    
-    // Обновляем каждые 60 секунд для актуального онлайн-статуса
-    const interval = setInterval(fetchUsers, 60000);
-    
-    return () => clearInterval(interval);
-  }, []);
+    if (role !== 'superadmin') {
+      setError('Доступ только для супер-админов');
+      setLoading(false);
+    } else {
+      fetchUsers();
+      const interval = setInterval(fetchUsers, 60000);
+      return () => clearInterval(interval);
+    }
+  }, [role]);
 
   const exportToCSV = () => {
     if (!Array.isArray(users) || users.length === 0) return;
@@ -155,13 +162,15 @@ export default function UsersPage() {
     const errors: any = {};
     if (!addForm.username) errors.username = 'Обязательное поле';
     if (!addForm.role) errors.role = 'Обязательное поле';
-    if (!addForm.phone || addForm.phone.length < 10) errors.phone = 'Введите корректный телефон';
-    
+    if (addForm.role !== 'superadmin') {
+      if (!addForm.first_name) errors.first_name = 'Обязательное поле';
+      if (!addForm.last_name) errors.last_name = 'Обязательное поле';
+      if (!addForm.phone || addForm.phone.length < 10) errors.phone = 'Введите корректный телефон';
+    }
     // Пароль обязателен только при создании нового пользователя
     if (!editUser && !addForm.password) {
       errors.password = 'Пароль обязателен для нового пользователя';
     }
-    
     return errors;
   };
   
@@ -175,7 +184,7 @@ export default function UsersPage() {
     
     setAddLoading(true);
     try {
-      const token = localStorage.getItem('access');
+      const token = access;
       let res;
       if (editUser) {
         // PATCH для редактирования
@@ -243,7 +252,7 @@ export default function UsersPage() {
   const confirmDelete = async () => {
     if (!selectedDeleteId) return;
     try {
-      const token = localStorage.getItem('access');
+      const token = access;
       const res = await fetch(`${API_URL}/api/users/${selectedDeleteId}/`, {
         method: 'DELETE',
         headers: { Authorization: `Bearer ${token}` },
@@ -368,10 +377,11 @@ export default function UsersPage() {
                     name="first_name"
                     value={addForm.first_name}
                     onChange={handleAddChange}
-                    className={`input w-full h-11 px-4 rounded border border-gray-300 focus:ring-2 focus:ring-blue-500 ${addFieldErrors.first_name ? 'border-red-500' : ''}`}
-                    required
+                    className={`input w-full h-11 px-4 rounded border border-gray-300 focus:ring-2 focus:ring-blue-500 ${(addFieldErrors.first_name && addForm.role !== 'superadmin') ? 'border-red-500' : ''}`}
+                    required={addForm.role !== 'superadmin'}
+                    disabled={addForm.role === 'superadmin'}
                   />
-                  {addFieldErrors.first_name && <span className="text-red-500 text-xs">{addFieldErrors.first_name}</span>}
+                  {(addFieldErrors.first_name && addForm.role !== 'superadmin') && <span className="text-red-500 text-xs">{addFieldErrors.first_name}</span>}
                 </div>
                 <div className="flex flex-col gap-1">
                   <label className="font-semibold text-sm">Фамилия *</label>
@@ -379,10 +389,11 @@ export default function UsersPage() {
                     name="last_name"
                     value={addForm.last_name}
                     onChange={handleAddChange}
-                    className={`input w-full h-11 px-4 rounded border border-gray-300 focus:ring-2 focus:ring-blue-500 ${addFieldErrors.last_name ? 'border-red-500' : ''}`}
-                    required
+                    className={`input w-full h-11 px-4 rounded border border-gray-300 focus:ring-2 focus:ring-blue-500 ${(addFieldErrors.last_name && addForm.role !== 'superadmin') ? 'border-red-500' : ''}`}
+                    required={addForm.role !== 'superadmin'}
+                    disabled={addForm.role === 'superadmin'}
                   />
-                  {addFieldErrors.last_name && <span className="text-red-500 text-xs">{addFieldErrors.last_name}</span>}
+                  {(addFieldErrors.last_name && addForm.role !== 'superadmin') && <span className="text-red-500 text-xs">{addFieldErrors.last_name}</span>}
                 </div>
                 <div className="flex flex-col gap-1 md:col-span-1">
                   <label className="font-semibold text-sm">Телефон *</label>
@@ -390,10 +401,11 @@ export default function UsersPage() {
                     country={'kg'}
                     value={typeof addForm.phone === 'string' ? addForm.phone.replace('+', '') : ''}
                     onChange={handlePhoneChange}
-                    inputClass={`!w-full !h-11 !pl-14 !pr-4 !rounded !border !border-gray-300 !focus:ring-2 !focus:ring-blue-500 ${addFieldErrors.phone ? '!border-red-500' : ''}`}
+                    inputClass={`!w-full !h-11 !pl-14 !pr-4 !rounded !border !border-gray-300 !focus:ring-2 !focus:ring-blue-500 ${(addFieldErrors.phone && addForm.role !== 'superadmin') ? '!border-red-500' : ''}`}
                     containerClass="!w-full"
+                    disabled={addForm.role === 'superadmin'}
                   />
-                  {addFieldErrors.phone && <span className="text-red-500 text-xs">{addFieldErrors.phone}</span>}
+                  {(addFieldErrors.phone && addForm.role !== 'superadmin') && <span className="text-red-500 text-xs">{addFieldErrors.phone}</span>}
                 </div>
                 <div className="flex flex-col gap-1 md:col-span-1">
                   <label className="font-semibold text-sm">Пароль {!editUser && '*'}</label>

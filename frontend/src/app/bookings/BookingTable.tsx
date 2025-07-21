@@ -53,6 +53,12 @@ function formatDateTime(dt: string) {
   return `${day}.${month}.${year}, ${hours}:${minutes}`;
 }
 
+const ROOM_CLASS_LABELS: Record<string, string> = {
+  standard: 'Стандарт',
+  semi_lux: 'Полу-люкс',
+  lux: 'Люкс',
+};
+
 const BookingTable: React.FC<Props> = ({ bookings, rooms, startDate, endDate }) => {
   // Pagination по датам
   const [startIdx, setStartIdx] = useState(0);
@@ -94,51 +100,85 @@ const BookingTable: React.FC<Props> = ({ bookings, rooms, startDate, endDate }) 
     );
   }
 
+  const tableWrapperRef = useRef<HTMLDivElement>(null);
+
+  // Горизонтальный скролл мышью
+  useEffect(() => {
+    const wrapper = tableWrapperRef.current;
+    if (!wrapper) return;
+    const onWheel = (e: WheelEvent) => {
+      if (e.deltaY !== 0 && Math.abs(e.deltaY) > Math.abs(e.deltaX)) {
+        e.preventDefault();
+        wrapper.scrollLeft += e.deltaY;
+      }
+    };
+    wrapper.addEventListener('wheel', onWheel, { passive: false });
+    return () => wrapper.removeEventListener('wheel', onWheel);
+  }, []);
+
+  // Добавляю обработчик горизонтального скролла колесиком мыши
+  const handleWheel = (e: React.WheelEvent<HTMLDivElement>) => {
+    if (e.deltaY !== 0) {
+      e.currentTarget.scrollLeft += e.deltaY;
+      e.preventDefault();
+    }
+  };
+
   return (
     <div className="rounded-lg shadow bg-white w-full">
       <div className="flex justify-end gap-2 mb-2">
         <button disabled={!canPrev} onClick={() => setStartIdx(i => Math.max(0, i - visibleDays))} className="px-2 py-1 rounded border bg-gray-100 disabled:opacity-50">{'<'}</button>
         <button disabled={!canNext} onClick={() => setStartIdx(i => Math.min(days.length - visibleDays, i + visibleDays))} className="px-2 py-1 rounded border bg-gray-100 disabled:opacity-50">{'>'}</button>
       </div>
-      <table className="w-full text-sm">
-        <thead>
-          <tr className="bg-gray-50 text-gray-700">
-            <th className="p-2 text-left">Тип номера</th>
-            <th className="p-2 text-left">Номер</th>
-            {pagedDays.map((d, i) => (
-              <th key={i} className="p-2 text-center text-xs min-w-0 truncate">{d.toLocaleDateString('ru-RU', { day: '2-digit', month: 'short' })}</th>
-            ))}
-          </tr>
-        </thead>
-        <tbody>
-          {rooms.map(room => (
-            <tr key={room.id}>
-              <td className="p-2 text-xs font-semibold min-w-0 truncate">{typeof room.room_class === 'object' ? room.room_class.label : room.room_class}</td>
-              <td className="p-2 text-xs font-semibold min-w-0 truncate">{room.number}</td>
-              {pagedDays.map((day, i) => {
-                const booking = (bookingsByRoom[room.id] || []).find(b => {
-                  const checkIn = new Date(b.check_in);
-                  const checkOut = new Date(b.check_out);
-                  return day >= checkIn && day <= checkOut;
-                });
-                return (
-                  <td key={i} className="p-0 min-w-0 h-10 border border-gray-200 align-middle">
-                    {booking ? (
-                      <TooltipOnClick content={`Гость: ${booking.guest?.full_name || ''}\nНомер: ${room.number}\nКоличество гостей: ${booking.people_count || 1}\nДаты: ${formatDateTime(booking.check_in)} — ${formatDateTime(booking.check_out)}`}> 
-                        <div className={`w-full h-full flex items-center justify-center text-xs font-medium rounded ${STATUS_COLORS[booking.status] || 'bg-gray-100 text-gray-700'}`}
-                          title={`${booking.guest?.full_name || ''}`}
-                        >
-                          {room.number} {booking.guest ? `(${booking.guest.full_name})` : ''}
-                        </div>
-                      </TooltipOnClick>
-                    ) : null}
-                  </td>
-                );
-              })}
+      <div
+        className="overflow-x-auto w-full"
+        style={{ WebkitOverflowScrolling: 'touch', maxWidth: '100%' }}
+        onWheel={handleWheel}
+      >
+        <table className="min-w-[1200px] w-full text-sm">
+          <thead>
+            <tr className="bg-gray-50 text-gray-700">
+              <th className="p-2 text-left">Тип номера</th>
+              <th className="p-2 text-left">Номер</th>
+              {pagedDays.map((d, i) => (
+                <th key={i} className="p-2 text-center text-xs min-w-0 truncate">{d.toLocaleDateString('ru-RU', { day: '2-digit', month: 'short' })}</th>
+              ))}
             </tr>
-          ))}
-        </tbody>
-      </table>
+          </thead>
+          <tbody>
+            {rooms.map(room => (
+              <tr key={room.id}>
+                <td className="p-2 text-xs font-semibold min-w-0 truncate">{
+                  typeof room.room_class === 'object' && room.room_class !== null
+                    ? ROOM_CLASS_LABELS[room.room_class.value] || room.room_class.label
+                    : ROOM_CLASS_LABELS[room.room_class] || room.room_class
+                }</td>
+                <td className="p-2 text-xs font-semibold min-w-0 truncate">{room.number}</td>
+                {pagedDays.map((day, i) => {
+                  const booking = (bookingsByRoom[room.id] || []).find(b => {
+                    const checkIn = new Date(b.check_in);
+                    const checkOut = new Date(b.check_out);
+                    return day >= checkIn && day <= checkOut;
+                  });
+                  return (
+                    <td key={i} className="p-0 min-w-0 h-10 border border-gray-200 align-middle">
+                      {booking ? (
+                        <TooltipOnClick content={`Гость: ${booking.guest?.full_name || ''}\nНомер: ${room.number}\nКоличество гостей: ${booking.people_count || 1}\nДаты: ${formatDateTime(booking.check_in)} — ${formatDateTime(booking.check_out)}`}> 
+                          <div className={`w-full h-full flex items-center justify-center text-xs font-medium rounded ${STATUS_COLORS[booking.status] || 'bg-gray-100 text-gray-700'}`}
+                            title={`${booking.guest?.full_name || ''}`}
+                          >
+                            {room.number} {booking.guest ? `(${booking.guest.full_name})` : ''}
+                          </div>
+                        </TooltipOnClick>
+                      ) : null}
+                    </td>
+                  );
+                })}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
     </div>
   );
 };

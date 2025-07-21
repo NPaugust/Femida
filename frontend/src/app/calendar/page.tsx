@@ -6,6 +6,8 @@ import "react-big-calendar/lib/css/react-big-calendar.css";
 import { API_URL } from "../../shared/api";
 import { FaChevronLeft, FaChevronRight, FaBed, FaUser, FaCalendar, FaBuilding } from 'react-icons/fa';
 import { useTranslation } from 'react-i18next';
+import { useSelector } from 'react-redux';
+import { RootState } from '../store';
 
 // Настройка локализации для русского языка
 moment.locale('ru', {
@@ -181,20 +183,20 @@ export default function CalendarPage() {
   const [showTooltip, setShowTooltip] = useState(false);
   const [tooltipEvent, setTooltipEvent] = useState<any>(null);
   const [tooltipPosition, setTooltipPosition] = useState({ x: 0, y: 0 });
-  const token = typeof window !== "undefined" ? localStorage.getItem("access") : "";
+  const access = useSelector((state: RootState) => state.auth.access);
 
   useEffect(() => {
-    if (!token) return;
+    if (!access) return;
     Promise.all([
-      fetch(`${API_URL}/api/bookings/`, { headers: { Authorization: `Bearer ${token}` } }).then(res => res.json()),
-      fetch(`${API_URL}/api/rooms/`, { headers: { Authorization: `Bearer ${token}` } }).then(res => res.json()),
-      fetch(`${API_URL}/api/buildings/`, { headers: { Authorization: `Bearer ${token}` } }).then(res => res.json()),
+      fetch(`${API_URL}/api/bookings/`, { headers: { Authorization: `Bearer ${access}` } }).then(res => res.json()),
+      fetch(`${API_URL}/api/rooms/`, { headers: { Authorization: `Bearer ${access}` } }).then(res => res.json()),
+      fetch(`${API_URL}/api/buildings/`, { headers: { Authorization: `Bearer ${access}` } }).then(res => res.json()),
     ]).then(([bookingsData, roomsData, buildingsData]) => {
       setBookings(bookingsData);
       setRooms(roomsData);
       setBuildings(buildingsData);
     });
-  }, [token]);
+  }, [access]);
 
   const events = useMemo<any[]>(() => {
     return bookings.map((b: Booking) => {
