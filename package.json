@@ -6,6 +6,7 @@
     "recharts": "^3.0.2"
   },
   "devDependencies": {
+    "@types/js-cookie": "^3.0.6",
     "@types/node": "^24.0.4",
     "@types/react-input-mask": "^3.0.6"
   }
