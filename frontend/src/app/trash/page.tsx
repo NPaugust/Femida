@@ -2,7 +2,7 @@
 import { useEffect, useState, useRef } from "react";
 import { useSearchParams } from "next/navigation";
 import { FaTrash, FaUndo, FaTrashAlt, FaEye, FaFilter, FaSearch, FaBed, FaUser, FaCalendarCheck, FaExclamationTriangle } from "react-icons/fa";
-import { API_URL } from "../../shared/api";
+import { API_URL, fetchWithAuth } from "../../shared/api";
 import ConfirmModal from "../../components/ConfirmModal";
 import HighlightedText from "../../components/HighlightedText";
 import Pagination from '../../components/Pagination';
@@ -38,6 +38,19 @@ export default function TrashPage() {
   const [actionType, setActionType] = useState<'restore' | 'delete' | null>(null);
 
   const access = useSelector((state: RootState) => state.auth.access);
+
+  useEffect(() => {
+    if (!access) {
+      window.location.href = '/login';
+    }
+  }, [access]);
+
+  if (!access) {
+    if (typeof window !== 'undefined') {
+      window.location.href = '/login';
+    }
+    return null;
+  }
 
   // СНАЧАЛА фильтрация
   const filteredItems = trashItems.filter(item => {
@@ -92,9 +105,7 @@ export default function TrashPage() {
       const types = ['rooms', 'guests', 'bookings'];
       let allTrash: TrashItem[] = [];
       for (const type of types) {
-        const res = await fetch(`${API_URL}/api/trash/${type}/`, {
-          headers: { 'Authorization': `Bearer ${access}` },
-        });
+        const res = await fetchWithAuth(`${API_URL}/api/trash/${type}/`, { headers: { 'Authorization': `Bearer ${access}` } });
         if (!res.ok) throw new Error('Ошибка загрузки корзины');
         const data = await res.json();
         allTrash = allTrash.concat(data.map((item: any) => ({
@@ -137,10 +148,7 @@ export default function TrashPage() {
       for (const id of ids) {
         const item = trashItems.find(i => i.id === id);
         if (!item) continue;
-        const res = await fetch(`${API_URL}/api/trash/restore/${item.type}s/${id}/`, {
-          method: 'POST',
-          headers: { 'Authorization': `Bearer ${access}` },
-        });
+        const res = await fetchWithAuth(`${API_URL}/api/trash/restore/${item.type}s/${id}/`, { method: 'POST', headers: { 'Authorization': `Bearer ${access}` } });
         if (!res.ok) throw new Error('Ошибка восстановления');
       }
       // После успешного восстановления обновляем список
@@ -166,10 +174,7 @@ export default function TrashPage() {
       for (const id of ids) {
         const item = trashItems.find(i => i.id === id);
         if (!item) continue;
-        const res = await fetch(`${API_URL}/api/trash/delete/${item.type}s/${id}/`, {
-          method: 'POST',
-          headers: { 'Authorization': `Bearer ${access}` },
-        });
+        const res = await fetchWithAuth(`${API_URL}/api/trash/delete/${item.type}s/${id}/`, { method: 'POST', headers: { 'Authorization': `Bearer ${access}` } });
         if (!res.ok) throw new Error('Ошибка удаления');
       }
       // После успешного удаления обновляем список

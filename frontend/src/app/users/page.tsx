@@ -8,7 +8,7 @@ import { useTranslation } from 'react-i18next';
 import { FaFileCsv, FaUserShield, FaUserCog, FaUserTie, FaPlus, FaEdit, FaTrash } from 'react-icons/fa';
 import PhoneInput from 'react-phone-input-2';
 import 'react-phone-input-2/lib/style.css';
-import { API_URL } from '../../shared/api';
+import { API_URL, fetchWithAuth } from '../../shared/api';
 import ConfirmModal from '../../components/ConfirmModal';
 import Pagination from '../../components/Pagination';
 import { useSelector } from 'react-redux';
@@ -70,6 +70,13 @@ export default function UsersPage() {
   const access = useSelector((state: RootState) => state.auth.access);
   const role = useSelector((state: RootState) => state.auth.role);
 
+  if (!access) {
+    if (typeof window !== 'undefined') {
+      window.location.href = '/login';
+    }
+    return null;
+  }
+
   const fetchUsers = async () => {
     try {
       if (!access) {
@@ -77,9 +84,7 @@ export default function UsersPage() {
         return;
       }
 
-      const res = await fetch(`${API_URL}/api/users/`, {
-        headers: { Authorization: `Bearer ${access}` },
-      });
+      const res = await fetchWithAuth(`${API_URL}/api/users/`, { headers: { 'Authorization': `Bearer ${access}` } });
 
       if (res.status === 403) {
         setError('Доступ только для супер-админов');
@@ -123,6 +128,12 @@ export default function UsersPage() {
       return () => clearInterval(interval);
     }
   }, [role]);
+
+  useEffect(() => {
+    if (!access) {
+      window.location.href = '/login';
+    }
+  }, [access]);
 
   const exportToCSV = () => {
     if (!Array.isArray(users) || users.length === 0) return;
@@ -194,24 +205,10 @@ export default function UsersPage() {
         if (!updateData.password) {
           delete updateData.password;
         }
-        res = await fetch(`${API_URL}/api/users/${editUser.id}/`, {
-          method: 'PATCH',
-          headers: {
-            'Content-Type': 'application/json',
-            Authorization: `Bearer ${token}`,
-          },
-          body: JSON.stringify(updateData),
-        });
+        res = await fetchWithAuth(`${API_URL}/api/users/${editUser.id}/`, { method: 'PATCH', headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` } });
       } else {
         // POST для создания
-        res = await fetch(`${API_URL}/api/users/`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            Authorization: `Bearer ${token}`,
-          },
-          body: JSON.stringify(addForm),
-        });
+        res = await fetchWithAuth(`${API_URL}/api/users/`, { method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` } });
       }
 
       if (!res.ok) {
@@ -254,10 +251,7 @@ export default function UsersPage() {
     if (!selectedDeleteId) return;
     try {
       const token = access;
-      const res = await fetch(`${API_URL}/api/users/${selectedDeleteId}/`, {
-        method: 'DELETE',
-        headers: { Authorization: `Bearer ${token}` },
-      });
+      const res = await fetchWithAuth(`${API_URL}/api/users/${selectedDeleteId}/`, { method: 'DELETE', headers: { 'Authorization': `Bearer ${token}` } });
       if (res.ok) {
         await fetchUsers();
       } else {

@@ -3,9 +3,9 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { FaBed, FaUser, FaCalendarCheck, FaChartBar, FaBuilding, FaMoneyBillWave, FaUsers, FaPlus, FaFileCsv, FaUsersCog, FaRegSmile, FaTrash } from "react-icons/fa";
 import StatusBadge from "../../components/StatusBadge";
-import { API_URL } from "../../shared/api";
+import { API_URL, fetchWithAuth } from "../../shared/api";
 import { useRef } from "react";
-import { Line, Pie } from 'react-chartjs-2';
+import { Line, Pie, Bar } from 'react-chartjs-2';
 import {
   Chart as ChartJS,
   ArcElement,
@@ -16,6 +16,7 @@ import {
   Title,
   Tooltip,
   Legend,
+  BarElement,
 } from 'chart.js';
 ChartJS.register(
   ArcElement,
@@ -23,6 +24,7 @@ ChartJS.register(
   LinearScale,
   PointElement,
   LineElement,
+  BarElement,
   Title,
   Tooltip,
   Legend
@@ -30,6 +32,17 @@ ChartJS.register(
 import { useSelector } from 'react-redux';
 import { RootState } from '../store';
 import Breadcrumbs from '../../components/Breadcrumbs';
+import BigActionCard from '../../components/BigActionCard';
+import { FaQuestionCircle } from 'react-icons/fa';
+
+// Делаю графики адаптивными
+const chartOptions = {
+  responsive: true,
+  plugins: {
+    legend: { display: true, position: 'top' as const },
+    title: { display: false },
+  },
+};
 
 interface DashboardStats {
   freeRooms: number;
@@ -79,7 +92,7 @@ export default function DashboardPage() {
   const [openGuests, setOpenGuests] = useState(false);
   const [openStats, setOpenStats] = useState(false);
   const [openData, setOpenData] = useState(false);
-  const [showAllSections, setShowAllSections] = useState(false);
+
   const auth = useSelector((state: RootState) => state.auth);
   const access = auth.access;
   const user = auth.user;
@@ -110,6 +123,12 @@ export default function DashboardPage() {
   }, [user]);
 
   useEffect(() => {
+    if (!access) {
+      window.location.href = '/login';
+    }
+  }, [access]);
+
+  useEffect(() => {
     fetchDashboardData();
   }, []);
 
@@ -120,10 +139,10 @@ export default function DashboardPage() {
         return;
       }
       setLoading(true);
-      const [roomsResponse, guestsResponse, bookingsResponse] = await Promise.all([
-        fetch(`${API_URL}/api/rooms/`, { headers: { Authorization: `Bearer ${access}` } }),
-        fetch(`${API_URL}/api/guests/`, { headers: { Authorization: `Bearer ${access}` } }),
-        fetch(`${API_URL}/api/bookings/`, { headers: { Authorization: `Bearer ${access}` } }),
+      const [roomsResponse, guestsResponse, bookingsResponse]: [Response, Response, Response] = await Promise.all([
+        fetchWithAuth(`${API_URL}/api/rooms/`, { headers: { Authorization: `Bearer ${access}` } }),
+        fetchWithAuth(`${API_URL}/api/guests/`, { headers: { Authorization: `Bearer ${access}` } }),
+        fetchWithAuth(`${API_URL}/api/bookings/`, { headers: { Authorization: `Bearer ${access}` } }),
       ]);
       if (roomsResponse.ok && guestsResponse.ok && bookingsResponse.ok) {
         const [roomsData, guestsData, bookingsData] = await Promise.all([
@@ -192,11 +211,13 @@ export default function DashboardPage() {
     }
   };
 
+  // Исправляю getRoomClassLabel для корректного отображения 'semi_lux' как 'Полу-люкс'
   const getRoomClassLabel = (roomClass: string) => {
     switch (roomClass) {
       case 'lux': return 'Люкс';
       case 'standard': return 'Стандарт';
       case 'econom': return 'Эконом';
+      case 'semi_lux': return 'Полу-люкс';
       default: return roomClass;
     }
   };
@@ -242,6 +263,431 @@ export default function DashboardPage() {
     busy: roomStats.busy,
     repair: roomStats.repair,
   };
+
+  const [activeBigCard, setActiveBigCard] = useState<null | 'stats' | 'charts' | 'help'>(null);
+
+  // Пример данных для графиков (можно заменить на реальные)
+  const chartData1 = {
+    labels: ['Янв', 'Фев', 'Мар', 'Апр', 'Май'],
+    datasets: [{
+      label: 'Доход',
+      data: [1200, 1900, 3000, 2500, 3200],
+      borderColor: '#6366f1',
+      backgroundColor: 'rgba(99,102,241,0.2)',
+      tension: 0.4,
+    }],
+  };
+  const chartData2 = {
+    labels: ['Свободные', 'Занятые', 'Недоступные'],
+    datasets: [{
+      label: 'Номера',
+      data: [roomStats.free, roomStats.busy, roomStats.repair],
+      backgroundColor: ['#34d399', '#f87171', '#fbbf24'],
+      borderWidth: 1,
+    }],
+  };
+  const chartData3 = {
+    labels: ['Гости', 'Бронирования'],
+    datasets: [{
+      label: 'Гости/Бронирования',
+      data: [stats.totalGuests, stats.totalBookings],
+      backgroundColor: ['#a78bfa', '#facc15'],
+      borderWidth: 1,
+    }],
+  };
+
+  // Формирую данные для графика по зданиям
+  const buildingsMap = new Map();
+  availableRooms.forEach(room => {
+    const buildingName = room.building?.name || 'Неизвестное здание';
+    if (!buildingsMap.has(buildingName)) {
+      buildingsMap.set(buildingName, 0);
+    }
+    buildingsMap.set(buildingName, buildingsMap.get(buildingName) + 1);
+  });
+  const buildingsChartData = {
+    labels: Array.from(buildingsMap.keys()),
+    datasets: [{
+      label: 'Количество номеров',
+      data: Array.from(buildingsMap.values()),
+      backgroundColor: '#60a5fa',
+      borderColor: '#2563eb',
+      borderWidth: 1,
+    }],
+  };
+
+  // Улучшаю helpAccordions: добавляю визуальные подсказки, стрелки, мини-инструкции
+  const helpAccordions = [
+    {
+      title: 'Как добавлять номера, гостей и бронирования?',
+      content: (
+        <div className="space-y-3">
+          <div className="flex items-center gap-2">
+            <svg width="32" height="32" viewBox="0 0 32 32" fill="none"><rect width="32" height="32" rx="8" fill="#e0e7ff"/><path d="M10 16h12M16 10v12" stroke="#6366f1" strokeWidth="2" strokeLinecap="round"/></svg>
+            <span className="font-bold text-base">Добавление номера:</span>
+            <span className="text-gray-700">Перейдите в раздел <b>Номера</b> и нажмите <b>Добавить номер</b>.</span>
+          </div>
+          <div className="flex items-center gap-2">
+            <svg width="32" height="32" viewBox="0 0 32 32" fill="none"><rect width="32" height="32" rx="8" fill="#bbf7d0"/><path d="M16 10v12M10 16h12" stroke="#22c55e" strokeWidth="2" strokeLinecap="round"/></svg>
+            <span className="font-bold text-base">Добавление гостя:</span>
+            <span className="text-gray-700">Перейдите в раздел <b>Гости</b> и нажмите <b>Добавить гостя</b>.</span>
+          </div>
+          <div className="flex items-center gap-2">
+            <svg width="32" height="32" viewBox="0 0 32 32" fill="none"><rect width="32" height="32" rx="8" fill="#fef08a"/><path d="M10 16h12" stroke="#eab308" strokeWidth="2" strokeLinecap="round"/></svg>
+            <span className="font-bold text-base">Добавление бронирования:</span>
+            <span className="text-gray-700">Перейдите в раздел <b>Бронирование</b> и выберите нужные параметры.</span>
+          </div>
+        </div>
+      ),
+    },
+    {
+      title: 'Как просматривать отчёты?',
+      content: (
+        <div className="flex items-center gap-2">
+          <svg width="32" height="32" viewBox="0 0 32 32" fill="none"><rect width="32" height="32" rx="8" fill="#fef9c3"/><path d="M10 16h12" stroke="#f59e42" strokeWidth="2" strokeLinecap="round"/></svg>
+          <span className="text-gray-700">Перейдите в раздел <b>Отчёты</b> в верхнем меню. Выберите нужный период и скачайте отчёт.</span>
+        </div>
+      ),
+    },
+    {
+      title: 'Как редактировать данные гостя?',
+      content: (
+        <div className="flex items-center gap-2">
+          <svg width="32" height="32" viewBox="0 0 32 32" fill="none"><rect width="32" height="32" rx="8" fill="#f3e8ff"/><path d="M16 10v12" stroke="#a21caf" strokeWidth="2" strokeLinecap="round"/></svg>
+          <span className="text-gray-700">В разделе <b>Гости</b> найдите нужного гостя, нажмите на иконку <b>редактирования</b>, внесите изменения и сохраните.</span>
+        </div>
+      ),
+    },
+    {
+      title: 'Как восстановить удалённые данные?',
+      content: (
+        <div className="flex items-center gap-2">
+          <svg width="32" height="32" viewBox="0 0 32 32" fill="none"><rect width="32" height="32" rx="8" fill="#fee2e2"/><path d="M10 16h12" stroke="#ef4444" strokeWidth="2" strokeLinecap="round"/></svg>
+          <span className="text-gray-700">Воспользуйтесь разделом <b>Корзина</b> для восстановления удалённых номеров, гостей или бронирований.</span>
+        </div>
+      ),
+    },
+    {
+      title: 'Как сменить пароль или выйти из системы?',
+      content: (
+        <div className="flex items-center gap-2">
+          <svg width="32" height="32" viewBox="0 0 32 32" fill="none"><rect width="32" height="32" rx="8" fill="#e0e7ff"/><path d="M16 10v12" stroke="#6366f1" strokeWidth="2" strokeLinecap="round"/></svg>
+          <span className="text-gray-700">В разделе <b>Сотрудники</b> вы можете изменить пароль или выйти из системы с помощью кнопки <b>Выйти</b>.</span>
+        </div>
+      ),
+    },
+  ];
+
+  // Обновляю аккордеоны для графиков
+  const guestsBookingsBarData = {
+    labels: ['Гости', 'Бронирования'],
+    datasets: [
+      {
+        label: 'Гости',
+        data: [stats.totalGuests, 0],
+        backgroundColor: '#a78bfa',
+        borderColor: '#7c3aed',
+        borderWidth: 1,
+      },
+      {
+        label: 'Бронирования',
+        data: [0, stats.totalBookings],
+        backgroundColor: '#facc15',
+        borderColor: '#ca8a04',
+        borderWidth: 1,
+      },
+    ],
+  };
+  // Обновляю barChartOptions для горизонтальных bar chart
+  const horizontalBarChartOptions = {
+    responsive: true,
+    plugins: {
+      legend: { display: true, position: 'top' as const },
+      title: { display: false },
+    },
+    indexAxis: 'y' as const,
+    scales: {
+      x: { grid: { display: true }, title: { display: false }, beginAtZero: true, ticks: { font: { size: 12 } } },
+      y: { grid: { display: true }, title: { display: false }, ticks: { font: { size: 12 } } },
+    },
+    elements: {
+      bar: { borderRadius: 4, barPercentage: 0.5, categoryPercentage: 0.5 },
+    },
+    maintainAspectRatio: false,
+  };
+  const chartsAccordions = [
+    {
+      title: 'Динамика дохода',
+      content: <div style={{height: 180, minWidth: 220}}><Line data={chartData1} options={{...chartOptions, maintainAspectRatio: false}} /></div>,
+    },
+    {
+      title: 'Статус номеров',
+      content: <div style={{height: 180, minWidth: 220}}><Pie data={chartData2} options={{...chartOptions, maintainAspectRatio: false}} /></div>,
+    },
+    {
+      title: 'Гости и бронирования',
+      content: <div style={{height: 180, minWidth: 220}}><Bar data={guestsBookingsBarData} options={horizontalBarChartOptions} /></div>,
+    },
+    {
+      title: 'Номера по зданиям',
+      content: <div style={{height: 180, minWidth: 220}}><Bar data={buildingsChartData} options={horizontalBarChartOptions} /></div>,
+    },
+  ];
+
+  // Аккордеоны для статистики (оставляю текущие секции)
+  const statsAccordions = [
+    {
+      title: 'Данные',
+      content: (
+        <div className="p-6 bg-white/90 rounded-2xl shadow-lg mb-2 border border-gray-100">
+          {/* Здания и номера в стиле кинотеатра */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 md:gap-6">
+            {(() => {
+              // Группируем номера по зданиям
+              const buildingsMap = new Map();
+              availableRooms.forEach(room => {
+                const buildingName = room.building?.name || 'Неизвестное здание';
+                if (!buildingsMap.has(buildingName)) {
+                  buildingsMap.set(buildingName, []);
+                }
+                buildingsMap.get(buildingName).push(room);
+              });
+              return Array.from(buildingsMap.entries()).map(([buildingName, rooms]: [string, Room[]]) => (
+                <div key={buildingName} className="bg-gradient-to-br from-blue-50 to-blue-100 rounded-xl p-4 border border-blue-200">
+                  <h3 className="font-bold text-base text-blue-900 mb-3 flex items-center gap-2">
+                    <FaBuilding className="text-blue-600" />
+                    {buildingName}
+                  </h3>
+                  <div className="grid grid-cols-2 gap-2 sm:gap-3">
+                    {rooms.map(room => {
+                      const roomBookings = allBookings.filter(b => 
+                        (typeof b.room === 'object' ? b.room.number : b.room) === room.number
+                      );
+                      const activeBookings = roomBookings.filter(b => b.status === 'active');
+                      const totalGuests = roomBookings.reduce((sum, b) => sum + (b.people_count || 0), 0);
+                      return (
+                        <div 
+                          key={room.id} 
+                          onClick={() => handleRoomCardClick(room)}
+                          className={`relative p-4 rounded-lg transition-all duration-200 cursor-pointer group ${
+                            room.status === 'free' 
+                              ? 'bg-green-100 hover:bg-green-200 border border-green-300' 
+                              : room.status === 'busy' 
+                                ? 'bg-red-100 hover:bg-red-200 border border-red-300' 
+                                : 'bg-orange-100 hover:bg-orange-200 border border-orange-300'
+                          }`}
+                          title={`Номер ${room.number} - ${room.status === 'free' ? 'Свободен' : room.status === 'busy' ? 'Занят' : 'Недоступен'}`}
+                        >
+                          <div className={`w-3 h-3 rounded-full mx-auto mb-2 ${
+                            room.status === 'free' ? 'bg-green-500' : room.status === 'busy' ? 'bg-red-500' : 'bg-orange-500'
+                          }`}></div>
+                          <div className="font-bold text-sm text-gray-900 mb-3">№{room.number}</div>
+                          <div className="flex justify-between">
+                            <div className="text-left">
+                              <div className="text-sm text-gray-600 font-medium">
+                                {room.price_per_night ? Math.round(room.price_per_night).toLocaleString() + ' сом' : '—'}
+                              </div>
+                              <div className="text-xs text-gray-500 mt-1">
+                                {room.capacity} мест
+                              </div>
+                              <div className="text-xs text-blue-600 font-medium mt-1">
+                                {room.room_class === 'standard' ? 'Стандарт' : 
+                                 room.room_class === 'semi_lux' ? 'Полу-люкс' : 
+                                 room.room_class === 'lux' ? 'Люкс' : room.room_class}
+                              </div>
+                            </div>
+                            <div className="text-right">
+                              <div className="text-sm text-green-600 font-medium">
+                                {activeBookings.length} бронирований
+                              </div>
+                              <div className="text-xs text-gray-500 mt-1">
+                                {totalGuests} гостей
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              ));
+            })()}
+          </div>
+        </div>
+      ),
+    },
+    {
+      title: 'Статистика',
+      content: (
+        <div className="flex flex-row items-center gap-6 p-6 bg-white/90 rounded-2xl shadow-lg mb-2 border border-gray-100">
+          <div className="flex-1 flex flex-col gap-3">
+            <div className="flex items-center gap-2">
+              <span className="w-32 text-base font-medium text-gray-700">Свободные номера</span>
+              <div className="flex-1 bg-gray-200 rounded-full h-3 overflow-hidden shadow-inner">
+                <div className="bg-gradient-to-r from-green-400 to-green-500 h-3 rounded-full transition-all duration-500 shadow-sm" style={{ width: `${(roomStatusCounts.free/totalRooms)*100 || 0}%` }}></div>
+              </div>
+              <span className="ml-2 text-sm font-bold text-gray-900">{roomStatusCounts.free}/{totalRooms}</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <span className="w-32 text-base font-medium text-gray-700">Занятые номера</span>
+              <div className="flex-1 bg-gray-200 rounded-full h-3 overflow-hidden shadow-inner">
+                <div className="bg-gradient-to-r from-red-400 to-red-500 h-3 rounded-full transition-all duration-500 shadow-sm" style={{ width: `${(roomStatusCounts.busy/totalRooms)*100 || 0}%` }}></div>
+              </div>
+              <span className="ml-2 text-sm font-bold text-gray-900">{roomStatusCounts.busy}/{totalRooms}</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <span className="w-32 text-base font-medium text-gray-700">Недоступные</span>
+              <div className="flex-1 bg-gray-200 rounded-full h-3 overflow-hidden shadow-inner">
+                <div className="bg-gradient-to-r from-orange-400 to-orange-500 h-3 rounded-full transition-all duration-500 shadow-sm" style={{ width: `${(roomStatusCounts.repair/totalRooms)*100 || 0}%` }}></div>
+              </div>
+              <span className="ml-2 text-sm font-bold text-gray-900">{roomStatusCounts.repair}/{totalRooms}</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <span className="w-32 text-base font-medium text-gray-700">Гости</span>
+              <div className="flex-1 bg-gray-200 rounded-full h-3 overflow-hidden shadow-inner">
+                <div className="bg-gradient-to-r from-purple-400 to-purple-500 h-3 rounded-full transition-all duration-500 shadow-sm" style={{ width: `${(totalGuests/100)*100 || 0}%` }}></div>
+              </div>
+              <span className="ml-2 text-sm font-bold text-gray-900">{totalGuests}</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <span className="w-32 text-base font-medium text-gray-700">Бронирования</span>
+              <div className="flex-1 bg-gray-200 rounded-full h-3 overflow-hidden shadow-inner">
+                <div className="bg-gradient-to-r from-green-400 to-green-500 h-3 rounded-full transition-all duration-500 shadow-sm" style={{ width: `${(totalBookings/100)*100 || 0}%` }}></div>
+              </div>
+              <span className="ml-2 text-sm font-bold text-gray-900">{totalBookings}</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <span className="w-32 text-base font-medium text-gray-700">Оплачено</span>
+              <div className="flex-1 bg-gray-200 rounded-full h-3 overflow-hidden shadow-inner">
+                <div className="bg-gradient-to-r from-yellow-400 to-yellow-500 h-3 rounded-full transition-all duration-500 shadow-sm" style={{ width: `${(paidBookings/totalBookings)*100 || 0}%` }}></div>
+              </div>
+              <span className="ml-2 text-sm font-bold text-gray-900">{paidBookings}/{totalBookings}</span>
+            </div>
+          </div>
+        </div>
+      ),
+    },
+    {
+      title: 'Номера',
+      content: (
+        <div className="overflow-x-auto rounded-2xl shadow-xl bg-white/90 mb-4 animate-fade-in border border-gray-100">
+          <table className="w-full text-base">
+            <thead>
+              <tr className="bg-gradient-to-r from-blue-50 to-purple-50 text-gray-700 border-b border-gray-200">
+                <th className="p-4 text-left font-bold text-gray-800">Номер</th>
+                <th className="p-4 text-left font-bold text-gray-800">Класс</th>
+                <th className="p-4 text-left font-bold text-gray-800">Цена</th>
+                <th className="p-4 text-left font-bold text-gray-800">Вместимость</th>
+                <th className="p-4 text-left font-bold text-gray-800">Статус</th>
+                <th className="p-4 text-left font-bold text-gray-800">Здание</th>
+              </tr>
+            </thead>
+            <tbody>
+              {availableRooms.length === 0 ? (
+                <tr><td colSpan={6} className="text-center text-gray-400 py-8">Нет номеров</td></tr>
+              ) : (
+                availableRooms.map((room) => (
+                  <tr key={room.id} className="border-b border-gray-100 last:border-b-0 hover:bg-gradient-to-r hover:from-blue-50 hover:to-purple-50 transition-all duration-200 group">
+                    <td className="p-4 font-semibold text-gray-900 group-hover:text-blue-700 transition-colors">№{room.number}</td>
+                    <td className="p-4 text-gray-700">{safeString(getRoomClassLabel(room.room_class))}</td>
+                    <td className="p-4 text-gray-700 font-medium">{room.price_per_night ? Math.round(room.price_per_night).toLocaleString() + ' сом' : '—'}</td>
+                    <td className="p-4 text-gray-700">{room.capacity || '—'}</td>
+                    <td className="p-4"><StatusBadge status={room.status} size="sm" /></td>
+                    <td className="p-4 text-gray-700">{safeString(room.building?.name)}</td>
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
+        </div>
+      ),
+    },
+    {
+      title: 'Детали бронирований',
+      content: (
+        <div className="overflow-x-auto rounded-2xl shadow-xl bg-white/90 mb-4 animate-fade-in border border-gray-100">
+          <table className="w-full text-base">
+            <thead>
+              <tr className="bg-gradient-to-r from-green-50 to-blue-50 text-gray-700 border-b border-gray-200">
+                <th className="p-4 text-left font-bold text-gray-800">Гость</th>
+                <th className="p-4 text-left font-bold text-gray-800">Номер</th>
+                <th className="p-4 text-left font-bold text-gray-800">Класс</th>
+                <th className="p-4 text-left font-bold text-gray-800">Период</th>
+                <th className="p-4 text-left font-bold text-gray-800">Цена</th>
+                <th className="p-4 text-left font-bold text-gray-800">Статус</th>
+              </tr>
+            </thead>
+            <tbody>
+              {recentBookings.length === 0 ? (
+                <tr><td colSpan={6} className="text-center text-gray-400 py-8">Нет бронирований</td></tr>
+              ) : (
+                recentBookings.map((booking) => (
+                  <tr key={booking.id} className="border-b border-gray-100 last:border-b-0 hover:bg-gradient-to-r hover:from-green-50 hover:to-blue-50 transition-all duration-200 group">
+                    <td className="p-4 font-semibold text-gray-900 group-hover:text-green-700 transition-colors">{booking.guest.full_name}</td>
+                    <td className="p-4 text-gray-700">№{booking.room.number} • {booking.people_count} гостей</td>
+                    <td className="p-4 text-gray-700">{safeString(getRoomClassLabel(booking.room.room_class))}</td>
+                    <td className="p-4 text-gray-700">{formatDate(booking.check_in)} — {formatDate(booking.check_out)}</td>
+                    <td className="p-4 text-gray-700 font-medium">{booking.total_amount ? Math.round(booking.total_amount).toLocaleString() + ' сом' : 'Не оплачено'}</td>
+                    <td className="p-4">
+                      <StatusBadge 
+                        status={(() => {
+                          const now = new Date();
+                          const checkIn = new Date(booking.check_in);
+                          const checkOut = new Date(booking.check_out);
+                          if (now < checkIn) return 'pending';
+                          if (now >= checkIn && now <= checkOut) return 'active';
+                          return 'completed';
+                        })()} 
+                        size="sm" 
+                      />
+                    </td>
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
+        </div>
+      ),
+    },
+    {
+      title: 'Гости',
+      content: (
+        <div className="overflow-x-auto rounded-2xl shadow-xl bg-white/90 mb-4 animate-fade-in border border-gray-100">
+          <table className="w-full text-base">
+            <thead>
+              <tr className="bg-gradient-to-r from-purple-50 to-pink-50 text-gray-700 border-b border-gray-200">
+                <th className="p-4 text-left font-bold text-gray-800">Гость</th>
+                <th className="p-4 text-left font-bold text-gray-800">Контакт</th>
+                <th className="p-4 text-left font-bold text-gray-800">Статус</th>
+                <th className="p-4 text-left font-bold text-gray-800">Оплачено</th>
+              </tr>
+            </thead>
+            <tbody>
+              {recentGuests.length === 0 ? (
+                <tr><td colSpan={4} className="text-center text-gray-400 py-8">Нет гостей</td></tr>
+              ) : (
+                recentGuests.map((guest) => (
+                  <tr key={guest.id} className="border-b border-gray-100 last:border-b-0 hover:bg-gradient-to-r hover:from-purple-50 hover:to-pink-50 transition-all duration-200 group">
+                    <td className="p-4 font-semibold text-gray-900 group-hover:text-purple-700 transition-colors">{guest.full_name}</td>
+                    <td className="p-4 text-gray-700">{guest.phone || guest.inn || '—'}</td>
+                    <td className="p-4"><StatusBadge status={guest.status} size="sm" /></td>
+                    <td className="p-4 text-green-700 font-medium">{guest.total_spent ? Math.round(Number(guest.total_spent)).toLocaleString() + ' сом' : '—'}</td>
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
+        </div>
+      ),
+    },
+  ];
+
+  if (!access) {
+    if (typeof window !== 'undefined') {
+      window.location.href = '/login';
+    }
+    return null;
+  }
 
   if (loading) {
     return (
@@ -371,315 +817,70 @@ export default function DashboardPage() {
           )}
         </div>
 
-        {/* Центральная кнопка для показа всех секций */}
-        {!showAllSections && (
-          <div className="flex items-center justify-center min-h-[150px] mt-4 animate-fade-in">
+        {/* Блок с тремя большими кнопками */}
+        <div className="flex flex-col items-center justify-center mt-6 mb-8 w-full">
+          {!activeBigCard && (
+            <div className="flex flex-col sm:flex-row gap-4 w-full justify-center px-2 md:px-8 xl:px-24">
             <button 
-              onClick={() => setShowAllSections(true)}
-              className="group relative px-10 py-6 bg-gradient-to-br from-gray-50 to-blue-50 hover:from-blue-50 hover:to-indigo-50 text-gray-800 hover:text-blue-700 rounded-2xl font-bold text-xl shadow-lg hover:shadow-xl transition-all duration-300 transform hover:-translate-y-1 hover:scale-105 cursor-pointer border border-gray-200 hover:border-blue-300"
-            >
-              {/* Анимированный фон */}
-              <div className="absolute inset-0 bg-gradient-to-r from-transparent via-blue-100/30 to-transparent -skew-x-12 -translate-x-full group-hover:translate-x-full transition-transform duration-700"></div>
-              
-              {/* Иконка и текст */}
-              <div className="relative flex items-center gap-4">
-                <div className="w-12 h-12 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-full flex items-center justify-center group-hover:scale-110 transition-transform duration-300 shadow-md">
+                className="flex-1 min-w-[180px] max-w-none bg-blue-100 text-gray-900 rounded-2xl font-bold text-base shadow-lg hover:shadow-2xl transition-all duration-200 transform hover:-translate-y-1 hover:scale-105 cursor-pointer border border-gray-200 hover:border-blue-400 px-6 py-7 flex flex-col items-center gap-3 group"
+                onClick={() => setActiveBigCard('stats')}
+              >
+                <div className="w-10 h-10 bg-blue-500 rounded-full flex items-center justify-center mb-1 shadow group-hover:scale-110 transition-transform">
                   <FaChartBar className="text-white text-xl" />
                 </div>
-                <div className="text-left">
-                  <div className="text-2xl font-extrabold mb-1">Показать статистику</div>
-                  <div className="text-sm text-gray-600 group-hover:text-blue-600 font-medium">Статистика, данные и детали</div>
+                <span className="text-base font-bold tracking-tight">Статистика</span>
+                <span className="text-base text-gray-500 font-medium">Данные и детали</span>
+              </button>
+              <button
+                className="flex-1 min-w-[180px] max-w-none bg-green-100 text-gray-900 rounded-2xl font-bold text-base shadow-lg hover:shadow-2xl transition-all duration-200 transform hover:-translate-y-1 hover:scale-105 cursor-pointer border border-gray-200 hover:border-green-400 px-6 py-7 flex flex-col items-center gap-3 group"
+                onClick={() => setActiveBigCard('charts')}
+              >
+                <div className="w-10 h-10 bg-green-500 rounded-full flex items-center justify-center mb-1 shadow group-hover:scale-110 transition-transform">
+                  <FaChartBar className="text-white text-xl" />
                 </div>
-                <div className="w-10 h-10 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-full flex items-center justify-center group-hover:scale-110 transition-transform duration-300 shadow-md">
-                  <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7l5 5m0 0l-5 5m5-5H6" />
-                  </svg>
+                <span className="text-base font-bold tracking-tight">Графики</span>
+                <span className="text-base text-gray-500 font-medium">Визуализация</span>
+              </button>
+              <button
+                className="flex-1 min-w-[180px] max-w-none bg-purple-100 text-gray-900 rounded-2xl font-bold text-base shadow-lg hover:shadow-2xl transition-all duration-200 transform hover:-translate-y-1 hover:scale-105 cursor-pointer border border-gray-200 hover:border-purple-400 px-6 py-7 flex flex-col items-center gap-3 group"
+                onClick={() => setActiveBigCard('help')}
+              >
+                <div className="w-10 h-10 bg-purple-500 rounded-full flex items-center justify-center mb-1 shadow group-hover:scale-110 transition-transform">
+                  <FaQuestionCircle className="text-white text-xl" />
                 </div>
-              </div>
+                <span className="text-base font-bold tracking-tight">Помощь</span>
+                <span className="text-base text-gray-500 font-medium">Инструкции</span>
             </button>
           </div>
         )}
-
-        {/* Все секции - показываются только после нажатия кнопки */}
-        <div className={`transition-all duration-700 ${showAllSections ? 'opacity-100 max-h-[2000px]' : 'opacity-0 max-h-0 overflow-hidden'}`}>
-          <div className="mb-2">
-            <button onClick={() => setOpenData(v => !v)} className="flex items-center gap-3 text-lg font-bold text-gray-900 tracking-tight focus:outline-none w-full py-3 px-4 rounded-xl bg-gradient-to-r from-white/90 to-blue-50/90 shadow-lg border-l-4 border-l-blue-400 hover:border-l-blue-600 hover:shadow-xl hover:scale-[1.02] transition-all duration-300 group relative">
-              <FaBed className="text-blue-500 text-xl group-hover:scale-110 transition-transform" />
-              <span className="font-bold">Данные</span>
-              <span className={`ml-auto transition-transform duration-300 ${openData ? 'rotate-90' : ''}`}>▶</span>
-            </button>
-          <div className={`overflow-hidden transition-all duration-500 ${openData ? 'max-h-[800px] opacity-100' : 'max-h-0 opacity-0'}`}> 
-            <div className="p-6 bg-white/90 rounded-2xl shadow-lg mb-2 border border-gray-100">
-              {/* Здания и номера в стиле кинотеатра */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 md:gap-6">
-                {(() => {
-                  // Группируем номера по зданиям
-                  const buildingsMap = new Map();
-                  availableRooms.forEach(room => {
-                    const buildingName = room.building?.name || 'Неизвестное здание';
-                    if (!buildingsMap.has(buildingName)) {
-                      buildingsMap.set(buildingName, []);
-                    }
-                    buildingsMap.get(buildingName).push(room);
-                  });
-                  
-                                     return Array.from(buildingsMap.entries()).map(([buildingName, rooms]: [string, Room[]]) => (
-                    <div key={buildingName} className="bg-gradient-to-br from-blue-50 to-blue-100 rounded-xl p-4 border border-blue-200">
-                      <h3 className="font-bold text-blue-900 mb-3 text-lg flex items-center gap-2">
-                        <FaBuilding className="text-blue-600" />
-                        {buildingName}
-                      </h3>
-                      <div className="grid grid-cols-2 gap-2 sm:gap-3">
-                        {rooms.map(room => {
-                          const roomBookings = allBookings.filter(b => 
-                            (typeof b.room === 'object' ? b.room.number : b.room) === room.number
-                          );
-                          const activeBookings = roomBookings.filter(b => b.status === 'active');
-                          const totalGuests = roomBookings.reduce((sum, b) => sum + (b.people_count || 0), 0);
-                          
-                          return (
-                            <div 
-                              key={room.id} 
-                              onClick={() => handleRoomCardClick(room)}
-                              className={`relative p-4 rounded-lg transition-all duration-200 cursor-pointer group ${
-                                room.status === 'free' 
-                                  ? 'bg-green-100 hover:bg-green-200 border border-green-300' 
-                                  : room.status === 'busy' 
-                                    ? 'bg-red-100 hover:bg-red-200 border border-red-300' 
-                                    : 'bg-orange-100 hover:bg-orange-200 border border-orange-300'
-                              }`}
-                              title={`Номер ${room.number} - ${room.status === 'free' ? 'Свободен' : room.status === 'busy' ? 'Занят' : 'Недоступен'}`}
-                            >
-                              <div className={`w-3 h-3 rounded-full mx-auto mb-2 ${
-                                room.status === 'free' ? 'bg-green-500' : room.status === 'busy' ? 'bg-red-500' : 'bg-orange-500'
-                              }`}></div>
-                              
-                              <div className="font-bold text-sm text-gray-900 mb-3">№{room.number}</div>
-                              
-                              <div className="flex justify-between">
-                                {/* Левая колонка - основная информация */}
-                                <div className="text-left">
-                                  <div className="text-sm text-gray-600 font-medium">
-                                    {room.price_per_night ? Math.round(room.price_per_night).toLocaleString() + ' сом' : '—'}
-                                  </div>
-                                  <div className="text-xs text-gray-500 mt-1">
-                                    {room.capacity} мест
-                                  </div>
-                                  <div className="text-xs text-blue-600 font-medium mt-1">
-                                    {room.room_class === 'standard' ? 'Стандарт' : 
-                                     room.room_class === 'semi_lux' ? 'Полу-люкс' : 
-                                     room.room_class === 'lux' ? 'Люкс' : room.room_class}
-                                  </div>
-                                </div>
-                                
-                                {/* Правая колонка - бронирования */}
-                                <div className="text-right">
-                                  <div className="text-sm text-green-600 font-medium">
-                                    {activeBookings.length} бронирований
-                                  </div>
-                                  <div className="text-xs text-gray-500 mt-1">
-                                    {totalGuests} гостей
-                                  </div>
-                                </div>
-                              </div>
-                            </div>
-                          );
-                        })}
-                      </div>
-                    </div>
-                  ));
-                })()}
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <div className="mb-2">
-          <button onClick={() => setOpenStats(v => !v)} className="flex items-center gap-3 text-lg font-bold text-gray-900 tracking-tight focus:outline-none w-full py-3 px-4 rounded-xl bg-gradient-to-r from-white/90 to-cyan-50/90 shadow-lg border-l-4 border-l-cyan-400 hover:border-l-cyan-600 hover:shadow-xl hover:scale-[1.02] transition-all duration-300 group relative">
-            <FaChartBar className="text-cyan-500 text-xl group-hover:scale-110 transition-transform" />
-                          <span className="font-bold">Статистика</span>
-            <span className={`ml-auto transition-transform duration-300 ${openStats ? 'rotate-90' : ''}`}>▶</span>
-          </button>
-          <div className={`overflow-hidden transition-all duration-500 ${openStats ? 'max-h-[500px] opacity-100' : 'max-h-0 opacity-0'}`}> 
-            <div className="flex flex-row items-center gap-6 p-6 bg-white/90 rounded-2xl shadow-lg mb-2 border border-gray-100">
-              <div className="flex-1 flex flex-col gap-3">
-                <div className="flex items-center gap-2">
-                  <span className="w-32 text-sm font-medium text-gray-700">Свободные номера</span>
-                  <div className="flex-1 bg-gray-200 rounded-full h-3 overflow-hidden shadow-inner">
-                    <div className="bg-gradient-to-r from-green-400 to-green-500 h-3 rounded-full transition-all duration-500 shadow-sm" style={{ width: `${(roomStatusCounts.free/totalRooms)*100 || 0}%` }}></div>
-                  </div>
-                  <span className="ml-2 text-sm font-bold text-gray-900">{roomStatusCounts.free}/{totalRooms}</span>
-                </div>
-                <div className="flex items-center gap-2">
-                  <span className="w-32 text-sm font-medium text-gray-700">Занятые номера</span>
-                  <div className="flex-1 bg-gray-200 rounded-full h-3 overflow-hidden shadow-inner">
-                    <div className="bg-gradient-to-r from-red-400 to-red-500 h-3 rounded-full transition-all duration-500 shadow-sm" style={{ width: `${(roomStatusCounts.busy/totalRooms)*100 || 0}%` }}></div>
-                  </div>
-                  <span className="ml-2 text-sm font-bold text-gray-900">{roomStatusCounts.busy}/{totalRooms}</span>
-                </div>
-                <div className="flex items-center gap-2">
-                  <span className="w-32 text-sm font-medium text-gray-700">Недоступные</span>
-                  <div className="flex-1 bg-gray-200 rounded-full h-3 overflow-hidden shadow-inner">
-                    <div className="bg-gradient-to-r from-orange-400 to-orange-500 h-3 rounded-full transition-all duration-500 shadow-sm" style={{ width: `${(roomStatusCounts.repair/totalRooms)*100 || 0}%` }}></div>
-                  </div>
-                  <span className="ml-2 text-sm font-bold text-gray-900">{roomStatusCounts.repair}/{totalRooms}</span>
-                </div>
-                <div className="flex items-center gap-2">
-                  <span className="w-32 text-sm font-medium text-gray-700">Гости</span>
-                  <div className="flex-1 bg-gray-200 rounded-full h-3 overflow-hidden shadow-inner">
-                    <div className="bg-gradient-to-r from-purple-400 to-purple-500 h-3 rounded-full transition-all duration-500 shadow-sm" style={{ width: `${(totalGuests/100)*100 || 0}%` }}></div>
-                  </div>
-                  <span className="ml-2 text-sm font-bold text-gray-900">{totalGuests}</span>
-                </div>
-                <div className="flex items-center gap-2">
-                  <span className="w-32 text-sm font-medium text-gray-700">Бронирования</span>
-                  <div className="flex-1 bg-gray-200 rounded-full h-3 overflow-hidden shadow-inner">
-                    <div className="bg-gradient-to-r from-green-400 to-green-500 h-3 rounded-full transition-all duration-500 shadow-sm" style={{ width: `${(totalBookings/100)*100 || 0}%` }}></div>
-                  </div>
-                  <span className="ml-2 text-sm font-bold text-gray-900">{totalBookings}</span>
-                </div>
-                <div className="flex items-center gap-2">
-                  <span className="w-32 text-sm font-medium text-gray-700">Оплачено</span>
-                  <div className="flex-1 bg-gray-200 rounded-full h-3 overflow-hidden shadow-inner">
-                    <div className="bg-gradient-to-r from-yellow-400 to-yellow-500 h-3 rounded-full transition-all duration-500 shadow-sm" style={{ width: `${(paidBookings/totalBookings)*100 || 0}%` }}></div>
-                  </div>
-                  <span className="ml-2 text-sm font-bold text-gray-900">{paidBookings}/{totalBookings}</span>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-        
-        <div className="mb-1">
-          <button onClick={() => setOpenRooms(v => !v)}
-            className="flex items-center gap-3 text-lg font-bold text-gray-900 tracking-tight focus:outline-none w-full py-3 px-4 rounded-xl bg-gradient-to-r from-white/90 to-blue-50/90 shadow-lg border-l-4 border-l-blue-400 hover:border-l-blue-600 hover:shadow-xl hover:scale-[1.02] transition-all duration-300 group relative">
-            <FaBed className="text-blue-500 text-xl group-hover:scale-110 transition-transform" />
-            <span>Номера</span>
-            <span className={`ml-auto transition-transform duration-300 ${openRooms ? 'rotate-90' : ''}`}>▶</span>
-          </button>
-          <div className={`overflow-hidden transition-all duration-500 ${openRooms ? 'max-h-[1000px] opacity-100' : 'max-h-0 opacity-0'}`}> 
-            <div className="overflow-x-auto rounded-2xl shadow-xl bg-white/90 mb-4 animate-fade-in border border-gray-100">
-              <table className="w-full text-base">
-                <thead>
-                  <tr className="bg-gradient-to-r from-blue-50 to-purple-50 text-gray-700 border-b border-gray-200">
-                    <th className="p-4 text-left font-bold text-gray-800">Номер</th>
-                    <th className="p-4 text-left font-bold text-gray-800">Класс</th>
-                    <th className="p-4 text-left font-bold text-gray-800">Цена</th>
-                    <th className="p-4 text-left font-bold text-gray-800">Вместимость</th>
-                    <th className="p-4 text-left font-bold text-gray-800">Статус</th>
-                    <th className="p-4 text-left font-bold text-gray-800">Здание</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {availableRooms.length === 0 ? (
-                    <tr><td colSpan={6} className="text-center text-gray-400 py-8">Нет номеров</td></tr>
-                  ) : (
-                    availableRooms.map((room) => (
-                      <tr key={room.id} className="border-b border-gray-100 last:border-b-0 hover:bg-gradient-to-r hover:from-blue-50 hover:to-purple-50 transition-all duration-200 group">
-                        <td className="p-4 font-semibold text-gray-900 group-hover:text-blue-700 transition-colors">№{room.number}</td>
-                        <td className="p-4 text-gray-700">{safeString(getRoomClassLabel(room.room_class))}</td>
-                        <td className="p-4 text-gray-700 font-medium">{room.price_per_night ? Math.round(room.price_per_night).toLocaleString() + ' сом' : '—'}</td>
-                        <td className="p-4 text-gray-700">{room.capacity || '—'}</td>
-                        <td className="p-4"><StatusBadge status={room.status} size="sm" /></td>
-                        <td className="p-4 text-gray-700">{safeString(room.building?.name)}</td>
-                      </tr>
-                    ))
-                  )}
-                </tbody>
-              </table>
-            </div>
-          </div>
-        </div>
-
-        <div className="mb-1">
-          <button onClick={() => setOpenBookings(v => !v)}
-            className="flex items-center gap-3 text-lg font-bold text-gray-900 tracking-tight focus:outline-none w-full py-3 px-4 rounded-xl bg-gradient-to-r from-white/90 to-green-50/90 shadow-lg border-l-4 border-l-green-400 hover:border-l-green-600 hover:shadow-xl hover:scale-[1.02] transition-all duration-300 group relative">
-            <FaCalendarCheck className="text-green-500 text-xl group-hover:scale-110 transition-transform" />
-            <span>Детали бронирований</span>
-            <span className={`ml-auto transition-transform duration-300 ${openBookings ? 'rotate-90' : ''}`}>▶</span>
-          </button>
-          <div className={`overflow-hidden transition-all duration-500 ${openBookings ? 'max-h-[1000px] opacity-100' : 'max-h-0 opacity-0'}`}> 
-            <div className="overflow-x-auto rounded-2xl shadow-xl bg-white/90 mb-4 animate-fade-in border border-gray-100">
-              <table className="w-full text-base">
-                <thead>
-                  <tr className="bg-gradient-to-r from-green-50 to-blue-50 text-gray-700 border-b border-gray-200">
-                    <th className="p-4 text-left font-bold text-gray-800">Гость</th>
-                    <th className="p-4 text-left font-bold text-gray-800">Номер</th>
-                    <th className="p-4 text-left font-bold text-gray-800">Класс</th>
-                    <th className="p-4 text-left font-bold text-gray-800">Период</th>
-                    <th className="p-4 text-left font-bold text-gray-800">Цена</th>
-                    <th className="p-4 text-left font-bold text-gray-800">Статус</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {recentBookings.length === 0 ? (
-                    <tr><td colSpan={6} className="text-center text-gray-400 py-8">Нет бронирований</td></tr>
-                  ) : (
-                    recentBookings.map((booking) => (
-                      <tr key={booking.id} className="border-b border-gray-100 last:border-b-0 hover:bg-gradient-to-r hover:from-green-50 hover:to-blue-50 transition-all duration-200 group">
-                        <td className="p-4 font-semibold text-gray-900 group-hover:text-green-700 transition-colors">{booking.guest.full_name}</td>
-                        <td className="p-4 text-gray-700">№{booking.room.number} • {booking.people_count} гостей</td>
-                        <td className="p-4 text-gray-700">{safeString(getRoomClassLabel(booking.room.room_class))}</td>
-                        <td className="p-4 text-gray-700">{formatDate(booking.check_in)} — {formatDate(booking.check_out)}</td>
-                        <td className="p-4 text-gray-700 font-medium">{booking.total_amount ? Math.round(booking.total_amount).toLocaleString() + ' сом' : 'Не оплачено'}</td>
-                        <td className="p-4">
-                          <StatusBadge 
-                            status={(() => {
-                              const now = new Date();
-                              const checkIn = new Date(booking.check_in);
-                              const checkOut = new Date(booking.check_out);
-                              
-                              if (now < checkIn) return 'pending';
-                              if (now >= checkIn && now <= checkOut) return 'active';
-                              return 'completed';
-                            })()} 
-                            size="sm" 
-                          />
-                        </td>
-                      </tr>
-                    ))
-                  )}
-                </tbody>
-              </table>
-            </div>
-          </div>
-        </div>
-
-        <div className="mb-1">
-          <button onClick={() => setOpenGuests(v => !v)}
-            className="flex items-center gap-3 text-lg font-bold text-gray-900 tracking-tight focus:outline-none w-full py-3 px-4 rounded-xl bg-gradient-to-r from-white/90 to-purple-50/90 shadow-lg border-l-4 border-l-purple-400 hover:border-l-purple-600 hover:shadow-xl hover:scale-[1.02] transition-all duration-300 group relative">
-            <FaUsers className="text-purple-500 text-xl group-hover:scale-110 transition-transform" />
-            <span>Гости</span>
-            <span className={`ml-auto transition-transform duration-300 ${openGuests ? 'rotate-90' : ''}`}>▶</span>
-          </button>
-          <div className={`overflow-hidden transition-all duration-500 ${openGuests ? 'max-h-[1000px] opacity-100' : 'max-h-0 opacity-0'}`}> 
-            <div className="overflow-x-auto rounded-2xl shadow-xl bg-white/90 mb-4 animate-fade-in border border-gray-100">
-              <table className="w-full text-base">
-                <thead>
-                  <tr className="bg-gradient-to-r from-purple-50 to-pink-50 text-gray-700 border-b border-gray-200">
-                    <th className="p-4 text-left font-bold text-gray-800">Гость</th>
-                    <th className="p-4 text-left font-bold text-gray-800">Контакт</th>
-                    <th className="p-4 text-left font-bold text-gray-800">Статус</th>
-                    <th className="p-4 text-left font-bold text-gray-800">Оплачено</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {recentGuests.length === 0 ? (
-                    <tr><td colSpan={4} className="text-center text-gray-400 py-8">Нет гостей</td></tr>
-                  ) : (
-                    recentGuests.map((guest) => (
-                      <tr key={guest.id} className="border-b border-gray-100 last:border-b-0 hover:bg-gradient-to-r hover:from-purple-50 hover:to-pink-50 transition-all duration-200 group">
-                        <td className="p-4 font-semibold text-gray-900 group-hover:text-purple-700 transition-colors">{guest.full_name}</td>
-                        <td className="p-4 text-gray-700">{guest.phone || guest.inn || '—'}</td>
-                        <td className="p-4"><StatusBadge status={guest.status} size="sm" /></td>
-                        <td className="p-4 text-green-700 font-medium">{guest.total_spent ? Math.round(Number(guest.total_spent)).toLocaleString() + ' сом' : '—'}</td>
-                      </tr>
-                    ))
-                  )}
-                </tbody>
-              </table>
-            </div>
-            </div>
+          <div className={`w-full transition-all duration-300 ${activeBigCard ? 'max-w-full' : ''} px-0`}>
+            {activeBigCard === 'stats' && (
+              <BigActionCard
+                icon={<FaChartBar className="text-white text-2xl" />}
+                title="Статистика"
+                description="Данные и детали"
+                accordions={statsAccordions}
+                onBack={() => setActiveBigCard(null)}
+              />
+            )}
+            {activeBigCard === 'charts' && (
+              <BigActionCard
+                icon={<FaChartBar className="text-white text-2xl" />}
+                title="Графики"
+                description="Визуализация"
+                accordions={chartsAccordions}
+                onBack={() => setActiveBigCard(null)}
+              />
+            )}
+            {activeBigCard === 'help' && (
+              <BigActionCard
+                icon={<FaQuestionCircle className="text-white text-2xl" />}
+                title="Помощь"
+                description="Инструкции"
+                accordions={helpAccordions}
+                onBack={() => setActiveBigCard(null)}
+              />
+            )}
           </div>
         </div>
       </div>

@@ -8,7 +8,7 @@ import Button from '../../components/Button';
 import LoadingSpinner from '../../components/LoadingSpinner';
 import ExportConfirmModal from '../../components/ExportConfirmModal';
 import HighlightedText from '../../components/HighlightedText';
-import { API_URL } from '../../shared/api';
+import { API_URL, fetchWithAuth } from '../../shared/api';
 import { useSearchParams } from 'next/navigation';
 import ConfirmModal from '../../components/ConfirmModal';
 import Pagination from '../../components/Pagination';
@@ -199,7 +199,7 @@ function RoomModal({ open, onClose, onSave, initial, buildings }: RoomModalProps
         room_type: form.room_type || 'standard',
         description: '',
       };
-      const response = await fetch(url, {
+      const response = await fetchWithAuth(url, {
         method,
         headers: {
           'Content-Type': 'application/json',
@@ -330,6 +330,14 @@ export default function RoomsPage() {
     fetchData();
   }, []);
 
+  useEffect(() => {
+    if (!access) {
+      if (typeof window !== 'undefined') {
+        window.location.href = '/login';
+      }
+    }
+  }, [access]);
+
   // Фильтры: закрытие по клику вне
   useEffect(() => {
     function handleClickOutside(e: MouseEvent) {
@@ -351,10 +359,10 @@ export default function RoomsPage() {
       }
 
       const [roomsResponse, buildingsResponse] = await Promise.all([
-        fetch(`${API_URL}/api/rooms/`, {
+        fetchWithAuth(`${API_URL}/api/rooms/`, {
           headers: { 'Authorization': `Bearer ${access}` },
         }),
-        fetch(`${API_URL}/api/buildings/`, {
+        fetchWithAuth(`${API_URL}/api/buildings/`, {
           headers: { 'Authorization': `Bearer ${access}` },
         }),
       ]);
@@ -405,7 +413,7 @@ export default function RoomsPage() {
       const ids = Array.isArray(deleteTarget) ? deleteTarget : [deleteTarget];
       
       await Promise.all(ids.map(id => 
-        fetch(`${API_URL}/api/rooms/${id}/`, {
+        fetchWithAuth(`${API_URL}/api/rooms/${id}/`, {
           method: 'DELETE',
           headers: {
             'Authorization': `Bearer ${access}`,

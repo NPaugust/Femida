@@ -26,3 +26,15 @@ const getApiUrl = () => {
 };
 
 export const API_URL = getApiUrl(); 
+
+export async function fetchWithAuth(input: RequestInfo, init?: RequestInit): Promise<Response> {
+  const response = await fetch(input, init);
+  if (response.status === 401) {
+    if (typeof window !== 'undefined') {
+      window.location.href = '/login';
+    }
+    // Возвращаем Promise, который никогда не резолвится, чтобы остановить дальнейшую обработку
+    return new Promise(() => {}) as unknown as Response;
+  }
+  return response;
+} 

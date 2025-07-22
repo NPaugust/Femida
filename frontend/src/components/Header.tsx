@@ -210,7 +210,7 @@ export default function Header({ onSidebarOpen }: { onSidebarOpen: () => void })
                 type="text"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                placeholder="Поиск гостей, номеров, бронирований..."
+                placeholder="Поиск гостей, номеров ..."
                 className="w-full pl-10 pr-4 py-2 bg-white/90 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent shadow-sm hover:shadow-md transition-all duration-300 text-sm"
               />
               <FaSearch className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={14} />

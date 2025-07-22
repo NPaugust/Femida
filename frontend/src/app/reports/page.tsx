@@ -1,6 +1,6 @@
 "use client";
 import { useEffect, useState, useRef } from "react";
-import { API_URL } from "../../shared/api";
+import { API_URL, fetchWithAuth } from "../../shared/api";
 import { saveAs } from "file-saver";
 import { useSearchParams } from "next/navigation";
 import { FaFileCsv, FaFilter, FaSearch, FaCalendarAlt, FaBed, FaUsers, FaMoneyBillWave, FaChartLine, FaDownload, FaEye, FaTimesCircle } from "react-icons/fa";
@@ -95,19 +95,15 @@ export default function ReportsPage() {
   useEffect(() => {
     if (!access) {
       window.location.href = '/login';
-      return;
     }
-    
-    // Вместо fetchData к /api/reports/ используем данные из bookings, rooms, guests
-    // Все фильтры и отображение оставляем прежними, только источник данных меняется
-    // Например, для статистики:
-    const getReportStatistics = () => {
-      const total = (bookings as any[]).length;
-      const paid = (bookings as any[]).filter((b: Booking) => b.payment_status === 'paid').length;
-      const totalAmount = (bookings as any[]).reduce((sum: number, b: Booking) => sum + (b.total_amount || 0), 0);
-      return { total, paid, totalAmount };
-    };
   }, [access]);
+
+  if (!access) {
+    if (typeof window !== 'undefined') {
+      window.location.href = '/login';
+    }
+    return null;
+  }
 
   // Фильтры: закрытие по клику вне
   const filterPanelRef = useRef<HTMLDivElement>(null);
@@ -283,7 +279,7 @@ export default function ReportsPage() {
                 window.location.href = '/login';
                 return;
               }
-              const response = await fetch(`${API_URL}/api/bookings/`, { headers: { Authorization: `Bearer ${access}` } });
+              const response = await fetchWithAuth(`${API_URL}/api/bookings/`);
               if (response.ok) {
                 const data = await response.json();
                 // Здесь можно обновить bookings через Redux, если нужно

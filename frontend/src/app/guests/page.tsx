@@ -10,7 +10,7 @@ import ExportConfirmModal from '../../components/ExportConfirmModal';
 import HighlightedText from '../../components/HighlightedText';
 import dynamic from 'next/dynamic';
 import 'react-phone-input-2/lib/style.css';
-import { API_URL } from '../../shared/api';
+import { API_URL, fetchWithAuth } from '../../shared/api';
 import { useSearchParams } from 'next/navigation';
 import ConfirmModal from '../../components/ConfirmModal';
 import Pagination from '../../components/Pagination';
@@ -122,7 +122,7 @@ function GuestModal({ open, onClose, onSave, initial }: GuestModalProps) {
     try {
       const url = initial ? `${API_URL}/api/guests/${initial.id}/` : `${API_URL}/api/guests/`;
       const method = initial ? 'PUT' : 'POST';
-      const response = await fetch(url, {
+      const response = await fetchWithAuth(url, {
         method,
         headers: {
           'Content-Type': 'application/json',
@@ -247,6 +247,19 @@ export default function GuestsPage() {
     fetchBookings();
   }, []);
 
+  useEffect(() => {
+    if (!access) {
+      window.location.href = '/login';
+    }
+  }, [access]);
+
+  if (!access) {
+    if (typeof window !== 'undefined') {
+      window.location.href = '/login';
+    }
+    return null;
+  }
+
   // Фильтры: закрытие по клику вне
   const filterPanelRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
@@ -271,7 +284,7 @@ export default function GuestsPage() {
         window.location.href = '/login';
         return;
       }
-      const response = await fetch(`${API_URL}/api/guests/`, {
+      const response = await fetchWithAuth(`${API_URL}/api/guests/`, {
         headers: { 'Authorization': `Bearer ${access}` },
       });
       if (response.ok) {
@@ -289,7 +302,7 @@ export default function GuestsPage() {
   const fetchBookings = async () => {
     try {
       if (!access) return;
-      const response = await fetch(`${API_URL}/api/bookings/`, {
+      const response = await fetchWithAuth(`${API_URL}/api/bookings/`, {
         headers: { 'Authorization': `Bearer ${access}` },
       });
       if (response.ok) {
@@ -327,7 +340,7 @@ export default function GuestsPage() {
     try {
       if (!access) return;
       const ids = Array.isArray(deleteTarget) ? deleteTarget : [deleteTarget];
-      await Promise.all(ids.map(id => fetch(`${API_URL}/api/guests/${id}/`, {
+      await Promise.all(ids.map(id => fetchWithAuth(`${API_URL}/api/guests/${id}/`, {
         method: 'DELETE',
         headers: { 'Authorization': `Bearer ${access}` },
       })));

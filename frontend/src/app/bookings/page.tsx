@@ -7,7 +7,7 @@ import Button from '../../components/Button';
 import LoadingSpinner from '../../components/LoadingSpinner';
 import ExportConfirmModal from '../../components/ExportConfirmModal';
 import HighlightedText from '../../components/HighlightedText';
-import { API_URL } from '../../shared/api';
+import { API_URL, fetchWithAuth } from '../../shared/api';
 import { useApi } from '../../shared/hooks/useApi';
 import { useSearchParams } from 'next/navigation';
 import ReactSelect from 'react-select';
@@ -218,7 +218,7 @@ function BookingModal({ open, onClose, onSave, guests, rooms, initial }: Booking
         : '';
       let res;
       if (initial && initial.id) {
-        res = await fetch(`${API_URL}/api/bookings/${initial.id}/`, {
+        res = await fetchWithAuth(`${API_URL}/api/bookings/${initial.id}/`, {
           method: 'PATCH',
           headers: {
             'Content-Type': 'application/json',
@@ -238,7 +238,7 @@ function BookingModal({ open, onClose, onSave, guests, rooms, initial }: Booking
           }),
         });
       } else {
-        res = await fetch(`${API_URL}/api/bookings/`, {
+        res = await fetchWithAuth(`${API_URL}/api/bookings/`, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
@@ -620,6 +620,15 @@ export default function BookingsPage() {
   const [showExportModal, setShowExportModal] = useState(false);
   const [exportLoading, setExportLoading] = useState(false);
 
+  useEffect(() => {
+    if (!access) {
+      if (typeof window !== 'undefined') {
+        window.location.href = '/login';
+      }
+      return;
+    }
+  }, [access]);
+
   // Загрузка данных через Redux
   const fetchAll = async () => {
     dispatch(setBookingsLoading(true));
@@ -783,6 +792,13 @@ export default function BookingsPage() {
     }
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, [showFilters]);
+
+  if (!access) {
+    if (typeof window !== 'undefined') {
+      window.location.href = '/login';
+    }
+    return null;
+  }
 
   return (
     <div className="bg-[#f7f8fa] p-0 flex flex-col w-full">
@@ -975,7 +991,7 @@ export default function BookingsPage() {
                 variant="danger"
                 onClick={async () => {
                   setDeleting(true);
-                  await fetch(`${API_URL}/api/bookings/${deleteBooking.id}/`, {
+                  await fetchWithAuth(`${API_URL}/api/bookings/${deleteBooking.id}/`, {
                     method: 'DELETE',
                     headers: { 'Authorization': `Bearer ${access}` },
                   });

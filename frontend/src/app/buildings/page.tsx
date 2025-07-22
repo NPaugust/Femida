@@ -4,7 +4,7 @@ import { FaPlus, FaEdit, FaTrash, FaChevronDown, FaChevronUp, FaBed, FaBuilding,
 import StatusBadge from '../../components/StatusBadge';
 import Button from '../../components/Button';
 import LoadingSpinner from '../../components/LoadingSpinner';
-import { API_URL } from '../../shared/api';
+import { API_URL, fetchWithAuth } from '../../shared/api';
 import React from 'react';
 import Pagination from '../../components/Pagination';
 import { useSelector } from 'react-redux';
@@ -76,7 +76,7 @@ function BuildingModal({ open, onClose, onSave, initial, buildings }: {
     try {
       const url = initial ? `${API_URL}/api/buildings/${initial.id}/` : `${API_URL}/api/buildings/`;
       const method = initial ? 'PUT' : 'POST';
-      const res = await fetch(url, {
+      const res = await fetchWithAuth(url, {
         method,
         headers: {
           'Content-Type': 'application/json',
@@ -170,10 +170,18 @@ export default function BuildingsPage() {
     fetchBuildings(); 
   }, []);
   
+  useEffect(() => {
+    if (!access) {
+      if (typeof window !== 'undefined') {
+        window.location.href = '/login';
+      }
+    }
+  }, [access]);
+
   const fetchBuildings = async () => {
     try {
       const token = access;
-      const res = await fetch(`${API_URL}/api/buildings/`, { headers: { 'Authorization': `Bearer ${token}` } });
+      const res = await fetchWithAuth(`${API_URL}/api/buildings/`, { headers: { 'Authorization': `Bearer ${token}` } });
       if (!res.ok) throw new Error('Ошибка загрузки');
       const buildingsData = await res.json();
       setBuildings(buildingsData);
@@ -197,7 +205,7 @@ export default function BuildingsPage() {
     if (!deleteId) return;
     try {
       const token = access;
-      const res = await fetch(`${API_URL}/api/buildings/${deleteId}/`, { method: 'DELETE', headers: { 'Authorization': `Bearer ${token}` } });
+      const res = await fetchWithAuth(`${API_URL}/api/buildings/${deleteId}/`, { method: 'DELETE', headers: { 'Authorization': `Bearer ${token}` } });
       if (res.ok) setBuildings(prev => prev.filter(x => x.id !== deleteId));
       else setError('Ошибка удаления');
     } catch { setError('Ошибка сети'); }
@@ -209,7 +217,7 @@ export default function BuildingsPage() {
     if (roomsByBuilding[buildingId]) return;
     try {
       const token = access;
-      const res = await fetch(`${API_URL}/api/rooms/?building_id=${buildingId}`, { headers: { 'Authorization': `Bearer ${token}` } });
+      const res = await fetchWithAuth(`${API_URL}/api/rooms/?building_id=${buildingId}`, { headers: { 'Authorization': `Bearer ${token}` } });
       if (!res.ok) return;
       let data = await res.json();
       // Фильтруем только номера этого здания (на всякий случай)
