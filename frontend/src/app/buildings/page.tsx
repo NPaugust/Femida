@@ -9,6 +9,7 @@ import React from 'react';
 import Pagination from '../../components/Pagination';
 import { useSelector } from 'react-redux';
 import { RootState } from '../store';
+import Breadcrumbs from '../../components/Breadcrumbs';
 
 interface Building {
   id: number;
@@ -296,6 +297,7 @@ export default function BuildingsPage() {
 
   return (
     <div className='min-h-screen bg-gray-50'>
+      <Breadcrumbs />
       {/* Верхняя панель с кнопкой */}
       <div className='flex items-center justify-between px-6 pt-8 pb-2 gap-4 flex-wrap'>
         <div className='flex items-center gap-2'>

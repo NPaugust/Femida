@@ -180,15 +180,15 @@ const RoomModal = ({ open, onClose, onSave, initial, buildings }: RoomModalProps
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm animate-fade-in">
-      <div className="bg-white rounded-2xl shadow-2xl p-8 w-full max-w-xl relative animate-scale-in border border-gray-100 focus:outline-none">
-        <div className="flex items-center gap-3 mb-6">
-          <div className="w-12 h-12 bg-blue-100 rounded-full flex items-center justify-center">
-            <FaBed className="text-blue-600 text-xl" />
+      <div className="bg-white rounded-2xl shadow-2xl p-4 sm:p-6 md:p-8 w-full max-w-xs sm:max-w-sm md:max-w-xl relative animate-scale-in border border-gray-100 focus:outline-none">
+        <div className="flex flex-col sm:flex-row items-center gap-2 sm:gap-3 mb-4 sm:mb-6">
+          <div className="w-10 h-10 sm:w-12 sm:h-12 bg-blue-100 rounded-full flex items-center justify-center">
+            <FaBed className="text-blue-600 text-lg sm:text-xl" />
           </div>
-          <h2 className="text-xl font-bold text-gray-900">{initial ? 'Редактировать номер' : 'Добавить номер'}</h2>
+          <h2 className="text-lg sm:text-xl font-bold text-gray-900">{initial ? 'Редактировать номер' : 'Добавить номер'}</h2>
         </div>
-        <button onClick={onClose} className="absolute top-4 right-4 text-gray-400 hover:text-gray-700 text-2xl font-bold focus:outline-none transition-colors">×</button>
-        <form className="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-4" onSubmit={handleSubmit}>
+        <button onClick={onClose} className="absolute top-2 right-2 sm:top-4 sm:right-4 text-gray-400 hover:text-gray-700 text-xl sm:text-2xl font-bold focus:outline-none transition-colors">×</button>
+        <form className="grid grid-cols-1 gap-x-4 gap-y-3 sm:gap-x-8 sm:gap-y-4 md:grid-cols-2" onSubmit={handleSubmit}>
           <label className="font-semibold md:text-right md:pr-2 flex items-center text-gray-700">Номер *</label>
           <input type="text" name="number" className="input w-full focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-200" value={form.number} onChange={handleChange} placeholder="Введите номер комнаты" autoFocus />
 

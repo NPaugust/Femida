@@ -23,6 +23,7 @@ import GuestModal from '../../components/GuestModal';
 import RoomModal, { Building } from '../../components/RoomModal';
 import { useSelector, useDispatch } from 'react-redux';
 import { RootState, AppDispatch, setBookings, addBooking, updateBooking, removeBooking, setBookingsLoading, setBookingsError, setGuests, setRooms } from '../store';
+import Breadcrumbs from '../../components/Breadcrumbs';
 
 // Типы данных
 interface Room {
@@ -785,6 +786,7 @@ export default function BookingsPage() {
 
   return (
     <div className="bg-[#f7f8fa] p-0 flex flex-col w-full">
+      <Breadcrumbs />
       {/* Верхняя панель */}
       <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 mb-6 px-8 pt-8">
         <div className="flex items-center gap-4">

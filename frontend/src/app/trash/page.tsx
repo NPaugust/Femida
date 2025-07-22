@@ -8,6 +8,7 @@ import HighlightedText from "../../components/HighlightedText";
 import Pagination from '../../components/Pagination';
 import { useSelector } from 'react-redux';
 import { RootState } from '../store';
+import Breadcrumbs from '../../components/Breadcrumbs';
 
 interface TrashItem {
   id: number;
@@ -294,7 +295,8 @@ export default function TrashPage() {
   const stats = getTrashStatistics();
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-gray-50 to-red-50">
+    <div className="min-h-screen bg-gray-50">
+      <Breadcrumbs />
       {/* Верхняя панель */}
       <div className="bg-white border-b border-red-200 px-6 py-4 shadow-sm">
         <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">

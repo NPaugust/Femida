@@ -2,10 +2,12 @@
 
 import React from 'react';
 import { FaBed, FaUser, FaCalendarCheck, FaMoneyBillWave, FaExclamationTriangle, FaCheckCircle, FaTimesCircle, FaInfoCircle, FaQuestionCircle, FaLightbulb, FaExclamationCircle, FaSearch } from 'react-icons/fa';
+import Breadcrumbs from '../../components/Breadcrumbs';
 
 export default function DocsPage() {
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-purple-50">
+      <Breadcrumbs />
       <div className="w-full px-2 md:px-6 xl:px-16 py-0 flex flex-col gap-1">
         <div className="flex items-center gap-4 bg-white/80 rounded-2xl shadow p-4 mb-2 mt-6">
           <div className="flex flex-col">

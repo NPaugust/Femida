@@ -29,6 +29,7 @@ ChartJS.register(
 );
 import { useSelector } from 'react-redux';
 import { RootState } from '../store';
+import Breadcrumbs from '../../components/Breadcrumbs';
 
 interface DashboardStats {
   freeRooms: number;
@@ -265,6 +266,7 @@ export default function DashboardPage() {
   return (
     <div className="min-h-screen w-full bg-gradient-to-br from-blue-50 via-white to-purple-50">
       <div className="w-full px-2 md:px-6 xl:px-16 py-0 flex flex-col gap-1">
+        <Breadcrumbs />
         <div className="flex items-center gap-4 bg-gradient-to-r from-white/90 to-blue-50/90 rounded-2xl shadow-lg p-6 mb-2 mt-6 border border-blue-100/50">
           <div className="flex flex-col">
             <span className="text-xl font-bold text-gray-900 mb-1">Добро пожаловать в админ-панель!</span>
