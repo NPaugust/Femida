@@ -47,7 +47,7 @@ export default function UsersPage() {
   const { t } = useTranslation();
   const [showAddModal, setShowAddModal] = useState(false);
   const [onlineFilter, setOnlineFilter] = useState<string>('');
-  const [addForm, setAddForm] = useState({
+  const [addForm, setAddForm] = useState<Record<string, string>>({
     username: '',
     first_name: '',
     last_name: '',
@@ -193,28 +193,37 @@ export default function UsersPage() {
     const errors = validateAddForm();
     setAddFieldErrors(errors);
     if (Object.keys(errors).length > 0) return;
-    
     setAddLoading(true);
     try {
       const token = access;
       let res;
       if (editUser) {
-        // PATCH для редактирования
-        const updateData: any = { ...addForm };
-        // Не отправляем пароль, если он не изменен
-        if (!updateData.password) {
-          delete updateData.password;
+        // PATCH для редактирования — отправляем только изменённые поля
+        const updateData: any = {};
+        Object.keys(addForm).forEach(key => {
+          if (addForm[key] !== (editUser as any)[key] && addForm[key] !== '') {
+            updateData[key] = addForm[key];
+          }
+        });
+        if (Object.keys(updateData).length === 0) {
+          setAddError('Нет изменений для сохранения');
+          setAddLoading(false);
+          return;
         }
-        res = await fetchWithAuth(`${API_URL}/api/users/${editUser.id}/`, { method: 'PATCH', headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` } });
+        res = await fetchWithAuth(`${API_URL}/api/users/${editUser.id}/`, { method: 'PATCH', headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` }, body: JSON.stringify(updateData) });
       } else {
         // POST для создания
-        res = await fetchWithAuth(`${API_URL}/api/users/`, { method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` } });
+        res = await fetchWithAuth(`${API_URL}/api/users/`, { method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` }, body: JSON.stringify(addForm) });
       }
-
+      const data = await res.json();
       if (!res.ok) {
-        const data = await res.json();
-        setAddError(data.detail || (editUser ? 'Ошибка обновления пользователя' : 'Ошибка создания пользователя'));
-        setAddFieldErrors(data);
+        if (data.username && Array.isArray(data.username) && data.username[0].toLowerCase().includes('уже существует')) {
+          setAddError('Пользователь с таким логином уже существует');
+          setAddFieldErrors({ ...addFieldErrors, username: 'Логин уже занят' });
+        } else {
+          setAddError(data.detail || (editUser ? 'Ошибка обновления пользователя' : 'Ошибка создания пользователя'));
+          setAddFieldErrors(data);
+        }
       } else {
         setAddSuccess(editUser ? 'Пользователь успешно обновлён!' : 'Пользователь успешно создан!');
         setShowAddModal(false);
@@ -228,6 +237,19 @@ export default function UsersPage() {
       setAddLoading(false);
     }
   };
+
+  // Сброс ошибок и фокус при открытии модалки
+  useEffect(() => {
+    if (showAddModal) {
+      setAddError('');
+      setAddSuccess('');
+      setAddFieldErrors({});
+      setTimeout(() => {
+        const firstInput = document.querySelector('input[name="username"]') as HTMLInputElement;
+        if (firstInput) firstInput.focus();
+      }, 100);
+    }
+  }, [showAddModal]);
 
   const openEditModal = (u: User) => {
     setEditUser(u);
@@ -311,7 +333,11 @@ export default function UsersPage() {
               {t('Экспорт в CSV')}
             </button>
             <button
-              onClick={() => setShowAddModal(true)}
+              onClick={() => {
+                setEditUser(null);
+                setAddForm({ username: '', first_name: '', last_name: '', role: 'admin', phone: '', password: '' });
+                setShowAddModal(true);
+              }}
               className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded shadow transition-all duration-200"
             >
               <FaPlus /> <span className="font-bold">Добавить сотрудника</span>
@@ -374,11 +400,10 @@ export default function UsersPage() {
                       name="first_name"
                       value={addForm.first_name}
                       onChange={handleAddChange}
-                      className={`input w-full h-11 px-4 rounded border border-gray-300 focus:ring-2 focus:ring-blue-500 ${(addFieldErrors.first_name && addForm.role !== 'superadmin') ? 'border-red-500' : ''}`}
-                      required={addForm.role !== 'superadmin'}
-                      disabled={addForm.role === 'superadmin'}
+                      className={`input w-full h-11 px-4 rounded border border-gray-300 focus:ring-2 focus:ring-blue-500 ${addFieldErrors.first_name ? 'border-red-500' : ''}`}
+                      required
                     />
-                    {(addFieldErrors.first_name && addForm.role !== 'superadmin') && <span className="text-red-500 text-xs">{addFieldErrors.first_name}</span>}
+                    {addFieldErrors.first_name && <span className="text-red-500 text-xs">{addFieldErrors.first_name}</span>}
                   </div>
                   <div className="flex flex-col gap-1">
                     <label className="font-semibold text-sm">Фамилия *</label>
@@ -386,11 +411,10 @@ export default function UsersPage() {
                       name="last_name"
                       value={addForm.last_name}
                       onChange={handleAddChange}
-                      className={`input w-full h-11 px-4 rounded border border-gray-300 focus:ring-2 focus:ring-blue-500 ${(addFieldErrors.last_name && addForm.role !== 'superadmin') ? 'border-red-500' : ''}`}
-                      required={addForm.role !== 'superadmin'}
-                      disabled={addForm.role === 'superadmin'}
+                      className={`input w-full h-11 px-4 rounded border border-gray-300 focus:ring-2 focus:ring-blue-500 ${addFieldErrors.last_name ? 'border-red-500' : ''}`}
+                      required
                     />
-                    {(addFieldErrors.last_name && addForm.role !== 'superadmin') && <span className="text-red-500 text-xs">{addFieldErrors.last_name}</span>}
+                    {addFieldErrors.last_name && <span className="text-red-500 text-xs">{addFieldErrors.last_name}</span>}
                   </div>
                   <div className="flex flex-col gap-1 md:col-span-1">
                     <label className="font-semibold text-sm">Телефон *</label>
@@ -398,11 +422,10 @@ export default function UsersPage() {
                       country={'kg'}
                       value={typeof addForm.phone === 'string' ? addForm.phone.replace('+', '') : ''}
                       onChange={handlePhoneChange}
-                      inputClass={`!w-full !h-11 !pl-14 !pr-4 !rounded !border !border-gray-300 !focus:ring-2 !focus:ring-blue-500 ${(addFieldErrors.phone && addForm.role !== 'superadmin') ? '!border-red-500' : ''}`}
+                      inputClass={`!w-full !h-11 !pl-14 !pr-4 !rounded !border !border-gray-300 !focus:ring-2 !focus:ring-blue-500 ${addFieldErrors.phone ? '!border-red-500' : ''}`}
                       containerClass="!w-full"
-                      disabled={addForm.role === 'superadmin'}
                     />
-                    {(addFieldErrors.phone && addForm.role !== 'superadmin') && <span className="text-red-500 text-xs">{addFieldErrors.phone}</span>}
+                    {addFieldErrors.phone && <span className="text-red-500 text-xs">{addFieldErrors.phone}</span>}
                   </div>
                   <div className="flex flex-col gap-1 md:col-span-1">
                     <label className="font-semibold text-sm">Пароль {!editUser && '*'}</label>

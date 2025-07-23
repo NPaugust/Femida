@@ -310,7 +310,7 @@ export default function BuildingsPage() {
       <div className='flex items-center justify-between px-6 pt-8 pb-2 gap-4 flex-wrap'>
         <div className='flex items-center gap-2'>
           <FaBuilding className='text-blue-600' />
-          <h2 className='text-xl font-bold text-center'>Здания</h2>
+          <h2 className='text-3xl font-black text-center'>Здания</h2>
         </div>
         <div className='flex items-center gap-3 justify-center'>
           <div className="relative">
@@ -343,16 +343,16 @@ export default function BuildingsPage() {
       </div>
       {/* Таблица корпусов */}
       <div className='px-6 py-6'>
-        <div className='rounded-xl shadow-lg bg-white w-full border border-gray-100 overflow-hidden'>
-          <table className='w-full text-sm'>
+        <div className='rounded-2xl shadow-xl bg-white w-full border border-gray-100 overflow-hidden'>
+          <table className='w-full text-base'>
             <thead>
-              <tr className='bg-gradient-to-r from-gray-50 to-blue-50 text-gray-700 border-b border-gray-200'>
-                            <th className='p-3 text-center font-bold'>ID</th>
-            <th className='p-3 text-center cursor-pointer font-bold' onClick={() => { setSortBy('name'); setSortDir(sortDir === 'asc' ? 'desc' : 'asc'); }}>Название</th>
-            <th className='p-3 text-center cursor-pointer font-bold' onClick={() => { setSortBy('address'); setSortDir(sortDir === 'asc' ? 'desc' : 'asc'); }}>Адрес</th>
-            <th className='p-3 text-center cursor-pointer font-bold' onClick={() => { setSortBy('description'); setSortDir(sortDir === 'asc' ? 'desc' : 'asc'); }}>Описание</th>
-            <th className='p-3 text-center cursor-pointer font-bold' onClick={() => { setSortBy('rooms'); setSortDir(sortDir === 'asc' ? 'desc' : 'asc'); }}>Номера</th>
-            <th className='p-3 text-center font-bold'>Действия</th>
+              <tr className='bg-gradient-to-r from-blue-50 to-purple-50 text-gray-700 border-b border-gray-200'>
+                <th className='p-3 text-center font-bold'>ID</th>
+                <th className='p-3 text-center cursor-pointer font-bold' onClick={() => { setSortBy('name'); setSortDir(sortDir === 'asc' ? 'desc' : 'asc'); }}>Название</th>
+                <th className='p-3 text-center cursor-pointer font-bold' onClick={() => { setSortBy('address'); setSortDir(sortDir === 'asc' ? 'desc' : 'asc'); }}>Адрес</th>
+                <th className='p-3 text-center cursor-pointer font-bold' onClick={() => { setSortBy('description'); setSortDir(sortDir === 'asc' ? 'desc' : 'asc'); }}>Описание</th>
+                <th className='p-3 text-center cursor-pointer font-bold' onClick={() => { setSortBy('rooms'); setSortDir(sortDir === 'asc' ? 'desc' : 'asc'); }}>Номера</th>
+                <th className='p-3 text-center font-bold'>Действия</th>
               </tr>
             </thead>
             <tbody>
